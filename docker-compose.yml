@@ -1,0 +1,54 @@
+# docker-compose.yml (Development Version)
+
+version: '3.8'
+
+services:
+  atlas:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: atlas-dev
+    
+    # Environment variables from .env file
+    env_file:
+      - .env
+    
+    # Additional dev environment variables
+    environment:
+      - DEBUG=True
+      - FLASK_ENV=development
+      - PYTHONUNBUFFERED=1
+    
+    # Expose on all interfaces for easy access
+    ports:
+      - "8000:8000"
+    
+    # Mount source code for hot reload
+    volumes:
+      - ./outputs:/app/outputs
+      - ./history.json:/app/history.json  # Persist research history
+      - ./app:/app/app              # Hot reload your app code
+      - ./requirements.txt:/app/requirements.txt
+    
+    # Simple network
+    networks:
+      - atlas-network
+    
+    # Restart only on failure (not always)
+    restart: on-failure
+    
+    # Basic health check (less strict)
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/').read()"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Simple logging (no rotation needed in dev)
+    logging:
+      driver: "json-file"
+
+networks:
+  atlas-network:
+    driver: bridge

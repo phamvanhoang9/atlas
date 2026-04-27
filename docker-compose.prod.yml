@@ -1,0 +1,72 @@
+services:
+  atlas:
+    image: atlas:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        CROSS_ENCODER_MODEL: ${CROSS_ENCODER_MODEL:-cross-encoder/ms-marco-MiniLM-L-12-v2}
+    container_name: atlas-production
+    restart: unless-stopped
+    
+    # Environment variables from .env file
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - TAVILY_API_KEY=${TAVILY_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - GOOGLE_CX_KEY=${GOOGLE_CX_KEY}
+      - ATLAS_AUTH_TOKEN=${ATLAS_AUTH_TOKEN}
+      - REQUIRE_API_KEYS=true
+      - HISTORY_BACKEND=sqlite
+      - HISTORY_DB_PATH=/app/.atlas_data/history.sqlite
+      - ATLAS_CACHE_DB=/app/.atlas_cache/cache.sqlite
+      - ENABLE_SEARCH_CACHE=true
+      - SEARCH_CACHE_TTL_SECONDS=86400
+      - ENABLE_EMBEDDING_CACHE=true
+      - EMBEDDING_CACHE_TTL_SECONDS=2592000
+      - ENABLE_CROSS_ENCODER_RERANKING=true
+      - CROSS_ENCODER_MODEL=${CROSS_ENCODER_MODEL:-cross-encoder/ms-marco-MiniLM-L-12-v2}
+    
+    # Expose on localhost only for security
+    ports:
+      - "127.0.0.1:8000:8000"
+    
+    # Persistent volumes
+    volumes:
+      - ./outputs:/app/outputs
+      - ./.atlas_data:/app/.atlas_data
+      - ./.atlas_cache:/app/.atlas_cache
+    
+    # Isolated network
+    networks:
+      - atlas-network
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    # Health monitoring
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/').read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Log rotation
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  atlas-network:
+    driver: bridge

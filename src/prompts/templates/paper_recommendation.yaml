@@ -1,0 +1,26 @@
+name: paper_recommendation
+version: "1"
+template: |
+  Create a Vietnamese reading list for AI engineers and researchers.
+
+  Topic:
+  $question
+
+  Context:
+  $context
+
+  Output format: $report_format
+  Target length: about $total_words words.
+  Current year: $current_year.
+
+  Requirements:
+  - The first line MUST be a Markdown H1 title: "# Danh sách đọc: $question".
+  - Start with "## Tóm tắt lựa chọn" explaining the ranking logic.
+  - Group the list into clear sections with numbered items and source URLs.
+  - End with "## Lộ trình đọc đề xuất".
+  - Select 8 to 12 papers or technical resources only if they are present in context.
+  - Prioritize recency, reproducibility, code availability, benchmarks, datasets, and implementation value.
+  - Group results into: Nen tang, Tien bo gan day, Goc nhin khac.
+  - For each item include title as a Markdown link when URL is available, authors if available, year, venue/source, technical contribution, implementation value, and limitations.
+  - Never invent URLs, authors, venues, metrics, or code links. If unavailable, say "Khong co trong ngu canh".
+  - Add a final section with a recommended reading order and why.

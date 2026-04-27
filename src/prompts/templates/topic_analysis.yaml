@@ -1,0 +1,35 @@
+name: topic_analysis
+version: "1"
+template: |
+  Write a deep Vietnamese technical analysis for the topic below.
+
+  Topic:
+  $question
+
+  Context:
+  $context
+
+  Output format: $report_format
+  Target length: about $total_words words.
+  Current year: $current_year.
+
+  Requirements:
+  - The first line MUST be a Markdown H1 title: "# Phân tích: $question".
+  - Use this exact high-level outline:
+    1. "## Tóm tắt điều hành"
+    2. "## Bản đồ khái niệm"
+    3. "## Cơ chế / kiến trúc cốt lõi"
+    4. "## So sánh phương pháp"
+    5. "## Kết quả, benchmark và bằng chứng"
+    6. "## Rủi ro triển khai"
+    7. "## Khuyến nghị hành động"
+    8. "## Nguồn tham khảo"
+  - Focus tightly on the requested topic.
+  - Synthesize the evidence into architecture patterns, research trends, implementation trade-offs, cost controls, evaluation methods, and production risks.
+  - Prioritize techniques likely to remain useful for the next 1 to 2 years: agentic workflows, retrieval evaluation, reranking, structured outputs, observability, and fallback design.
+  - Cite sources as Markdown links using source titles when available, for example: [Tên nguồn](https://example.com). Do not paste bare URLs in body paragraphs.
+  - In "## Nguồn tham khảo", list every cited source as "- [Tên nguồn](URL): why it matters".
+  - Include at least one compact Markdown table when comparing methods or trade-offs.
+  - Make the analysis actionable for an AI engineering buyer: architecture decisions, implementation steps, monitoring, cost, reliability, and go/no-go recommendations.
+  - If evidence is thin, explicitly mark it as "Suy luận từ ngữ cảnh" instead of overstating.
+  - Separate facts from inference when the context is incomplete.

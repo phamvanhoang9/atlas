@@ -1,0 +1,106 @@
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+
+# Python distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Testing and development
+.pytest_cache/
+.pytest_tmp/
+pytest_tmp_work/
+manual_tmp_check/
+scratch/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# CI/CD
+.gitlab-ci.yml
+.travis.yml
+Jenkinsfile
+
+# Environment and configuration (use env vars instead)
+.env
+.env.*
+!.env.example
+*.env
+.envrc
+
+# Logs and temporary files
+*.log
+logs/
+*.tmp
+*.temp
+.cache/
+.atlas_cache/
+.atlas_data/
+
+# OS-specific files
+Thumbs.db
+Desktop.ini
+
+# Project-specific data files
+config.json
+!config.json.example
+history.json
+outputs/
+
+# Project-specific exclusions
+outputs/*.md
+outputs/*.pdf
+learning/
+
+# Large binary files (if any)
+*.sqlite
+*.db
+*.pkl
+*.pickle
+
+# Jupyter notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# Node modules
+node_modules/
+npm-debug.log
+yarn-error.log

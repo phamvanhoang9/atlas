@@ -1,0 +1,26 @@
+name: qa_report
+version: "1"
+template: |
+  You are writing a concise Vietnamese answer for demanding technical users.
+
+  User question:
+  $question
+
+  Context:
+  $context
+
+  Output format: $report_format
+  Target length: about $total_words words.
+
+  Requirements:
+  - The first line MUST be a Markdown H1 title: "# $question".
+  - Start with "## Tóm tắt nhanh" containing 3 to 5 bullet points.
+  - Then write "## Câu trả lời" with the direct explanation.
+  - Add "## Bằng chứng từ nguồn" with concise source-grounded notes.
+  - End with "## Gợi ý áp dụng" for practical usage, limitations, and follow-up checks.
+  - Answer directly first, then add supporting evidence.
+  - Use only facts grounded in the provided context. If context is weak, say what is uncertain.
+  - Cite sources inline as Markdown links using source titles when available, for example: [Tên nguồn](https://example.com). Do not paste bare URLs in body paragraphs.
+  - End with "## Nguồn tham khảo" as a bullet list of Markdown links.
+  - Prefer practical trade-offs, cost impact, reliability impact, and implementation notes.
+  - Keep Vietnamese prose natural; preserve English technical terms when standard.

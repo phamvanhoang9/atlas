@@ -1,0 +1,20 @@
+name: query_generation
+version: "1"
+template: |
+  Generate exactly $max_iterations academic search queries for:
+  "$question"
+
+  Current year: $current_year.
+
+  Return only a valid JSON array with exactly $max_iterations item(s).
+  Required format: $format_example
+
+  Rules:
+  - Queries must be in English, even if the user query is Vietnamese.
+  - Prioritize papers, preprints, benchmarks, datasets, code, and implementation reports from $current_year and $previous_year.
+  - Include at least one strong academic operator per query: arxiv:$current_year, site:arxiv.org $current_year, paper $current_year, NeurIPS $current_year, ICML $current_year, ICLR $current_year, CVPR $current_year, ACL $current_year.
+  - Prefer "github", "code", "benchmark", "dataset", "evaluation", or "reproducible" when relevant.
+  - Do not return blogs, marketing pages, videos, or tutorial-only queries.
+
+  Good example:
+  $good_example

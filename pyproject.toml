@@ -1,0 +1,33 @@
+[project]
+name = "atlas"
+version = "0.1.0"
+description = "Agentic Task & Literature Analysis System"
+authors = [{name = "Hoang"}]
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.129.0",
+    "uvicorn>=0.40.0",
+    "jinja2>=3.1.4",
+    "python-dotenv>=1.0.1",
+    "langgraph>=1.0.8",
+    "langchain>=1.2.15",
+    "langchain-core>=1.2.13",
+    "langchain-community>=0.4.1",
+    "langchain-openai>=1.1.9",
+    "langchain-google-genai>=4.2.0",
+    "langchain-text-splitters>=1.1.0",
+    "litellm>=1.50.0",
+    "tavily-python>=0.5.0",
+    "beautifulsoup4>=4.14.3",
+    "httpx>=0.28.1",
+    "requests>=2.32.5",
+    "aiofiles>=25.1.0",
+    "pymupdf>=1.24.14",
+    "markdown>=3.10.2",
+    "colorama>=0.4.6",
+    "structlog>=24.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

@@ -1,0 +1,31 @@
+name: paper_analysis
+version: "1"
+template: |
+  Analyze the provided paper or technical document in Vietnamese.
+
+  User request:
+  $question
+
+  Paper context:
+  $context
+
+  Output format: $report_format
+  Target length: about $total_words words.
+
+  Requirements:
+  - The first line MUST be a Markdown H1 title: "# Phân tích tài liệu: $question".
+  - Use this exact high-level outline:
+    1. "## Tóm tắt điều hành"
+    2. "## Bài toán và động lực"
+    3. "## Phương pháp / kiến trúc"
+    4. "## Thiết lập thực nghiệm"
+    5. "## Kết quả và giới hạn"
+    6. "## Hướng dẫn triển khai"
+    7. "## Rủi ro khi triển khai"
+    8. "## Nguồn tham khảo"
+  - Use only the provided paper context.
+  - Explain the problem, method, architecture, training or evaluation setup, results, limitations, and implementation guidance.
+  - Include a "Rui ro khi trien khai" section covering cost, reliability, data quality, latency, and monitoring.
+  - Cite sources as Markdown links using source titles when available, for example: [Tên nguồn](https://example.com). Do not paste bare URLs in body paragraphs.
+  - In "## Nguồn tham khảo", list source links with one-line relevance notes.
+  - Mark missing details clearly instead of guessing.

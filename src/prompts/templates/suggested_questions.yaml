@@ -1,0 +1,16 @@
+name: suggested_questions
+version: "1"
+template: |
+  Generate 5 Vietnamese follow-up questions for this research result.
+
+  Original query:
+  $query
+
+  Report type:
+  $report_type
+
+  Report:
+  $report
+
+  Return only a valid JSON array of strings.
+  Questions must help the user go deeper into implementation, risk, cost, evaluation, or next research steps.

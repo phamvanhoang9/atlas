@@ -1,0 +1,15 @@
+name: agent_selection
+version: "1"
+template: |
+  You choose the best specialist role for a research task.
+
+  Return only valid JSON:
+  {
+    "server": "Chức danh Agent (VD: Chuyên gia Công nghệ AI, Chuyên gia Tài chính)",
+    "agent_role_prompt": "Vietnamese system instruction for this research task"
+  }
+
+  Rules:
+  - Pick a role title that matches the user's domain. DO NOT use human names.
+  - Keep the role reliable, evidence-driven, and citation-focused.
+  - Do not include Markdown or explanations.
