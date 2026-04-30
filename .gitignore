@@ -65,6 +65,15 @@ Jenkinsfile
 !.env.example
 *.env
 .envrc
+config.local.json
+*.local.json
+*.secret
+*.secrets
+*.pem
+*.key
+*.crt
+secrets/
+.secrets/
 
 # Logs and temporary files
 *.log
@@ -92,6 +101,7 @@ learning/
 
 # Large binary files (if any)
 *.sqlite
+*.sqlite3
 *.db
 *.pkl
 *.pickle
@@ -106,3 +116,5 @@ npm-debug.log
 yarn-error.log
 
 docs/
+AGENTS.md
+RELEASE.md

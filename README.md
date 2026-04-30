@@ -302,6 +302,12 @@ The production compose file:
 
 If your Docker installation uses the legacy command, replace `docker compose` with `docker-compose`.
 
+## Releases
+
+Stable versions are available from the repository's GitHub Releases page. Releases are created from Git tags such as `v1.0.0`, and GitHub provides source code archives for each release.
+
+ATLAS requires users to provide their own API keys in a local `.env` file copied from `.env.example`. Never commit real API keys, `.env` files, local `config.json` files, credentials, caches, SQLite databases, or generated reports.
+
 ## Development
 
 Install the same dependencies used in CI:
