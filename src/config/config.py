@@ -62,10 +62,12 @@ class ConfigSchema(BaseModel):
 class Config:
     """Config class for ATLAS."""
     
-    def __init__(self, config_file: str = None): 
+    def __init__(self, config_file: str = None):
         """Initialize the config class."""
         # Use config.json by default if no config_file specified and no CONFIG_FILE env var
-        self.config_file = config_file if config_file else os.getenv('CONFIG_FILE', 'config.json')
+        env_config_file = os.getenv('CONFIG_FILE')
+        self._config_file_explicit = config_file is not None or env_config_file is not None
+        self.config_file = config_file if config_file else env_config_file or 'config.json'
         
         self.retriever = os.getenv('RETRIEVER', "tavily")
         self.embedding_provider = os.getenv('EMBEDDING_PROVIDER', "openai")
@@ -154,6 +156,11 @@ class Config:
     def load_config_file(self) -> None:
         """Load the config file."""
         if self.config_file is None:
+            return None
+        if not os.path.exists(self.config_file):
+            if self._config_file_explicit:
+                raise FileNotFoundError(f"Config file not found: {self.config_file}")
+            logger.info("Config file %s not found; using defaults and environment variables", self.config_file)
             return None
         with open(self.config_file, "r") as f:
             config = json.load(f)

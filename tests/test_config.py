@@ -25,17 +25,26 @@ def test_config_from_file(temp_config_file):
     assert config.llm_model == "custom_model"
     assert config.token_limit == 5000
 
+def test_default_config_file_is_optional():
+    config = Config()
+    assert config.retriever == "tavily"
+    assert config.llm_model == "gpt-4o-mini"
+
+def test_explicit_missing_config_file_raises():
+    with pytest.raises(FileNotFoundError):
+        Config(config_file="non_existent.json")
+
 @patch.dict(os.environ, {"RETRIEVER": "tavily", "TOKEN_LIMIT": "9999"})
 def test_config_env_vars():
     # Mock open to avoid FileNotFoundError
-    with patch("builtins.open", MagicMock()):
+    with patch("os.path.exists", return_value=True), patch("builtins.open", MagicMock()):
         with patch("json.load", return_value={}):
             config = Config(config_file="non_existent.json")
             assert config.retriever == "tavily"
             assert config.token_limit == 9999
 
 def test_apply_mode_config():
-    with patch("builtins.open", MagicMock()):
+    with patch("os.path.exists", return_value=True), patch("builtins.open", MagicMock()):
         with patch("json.load", return_value={}):
             config = Config()
             
@@ -50,14 +59,14 @@ def test_apply_mode_config():
             assert config.total_words == 3000
 
 def test_invalid_config_value_raises_config_error():
-    with patch("builtins.open", MagicMock()):
+    with patch("os.path.exists", return_value=True), patch("builtins.open", MagicMock()):
         with patch("json.load", return_value={"token_limit": 999999}):
             with pytest.raises(ConfigError):
                 Config()
 
 @patch.dict(os.environ, {"REQUIRE_API_KEYS": "true"}, clear=True)
 def test_required_secrets_validation():
-    with patch("builtins.open", MagicMock()):
+    with patch("os.path.exists", return_value=True), patch("builtins.open", MagicMock()):
         with patch("json.load", return_value={}):
             with pytest.raises(ConfigError) as excinfo:
                 Config()
