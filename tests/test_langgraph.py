@@ -1,4 +1,5 @@
 import inspect
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -57,7 +58,13 @@ async def test_node_execution():
         "memory": researcher.memory,
     }
 
-    result = await choose_agent_node(test_state)
+    with patch(
+        "src.agents.planner.create_chat_completion",
+        new_callable=AsyncMock,
+        return_value='{"server": "research_agent", "agent_role_prompt": "Research role"}',
+    ):
+        result = await choose_agent_node(test_state)
+
     assert "agent" in result
     assert "agent_role" in result
 
