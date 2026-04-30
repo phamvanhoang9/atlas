@@ -8,7 +8,6 @@ from typing import Any
 
 from src.llm.completion import create_chat_completion
 from src.orchestration.state import ResearchState
-from src.prompts import render_prompt
 from src.prompts.functions import auto_agent_instructions, generate_search_queries_prompt
 from src.transport.streaming import stream_output
 

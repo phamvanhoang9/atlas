@@ -124,7 +124,7 @@ async def write_md_to_pdf(text: str) -> str:
         
         # Convert HTML to PDF using PyMuPDF
         pdf_document = fitz.open()
-        pdf_page = pdf_document.new_page(width=595, height=842)  # A4 size
+        pdf_document.new_page(width=595, height=842)  # A4 size
         
         # Use story to render HTML content with proper margins
         story = fitz.Story(html=full_html)
