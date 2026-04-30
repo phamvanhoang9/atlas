@@ -1,149 +1,367 @@
-# 🗺️ ATLAS
-**Agentic Task & Literature Analysis System**
+<h1 align="center">ATLAS</h1>
 
-> *AI Research Assistant with Multi-Agent Orchestration*
+<p align="center">
+  <strong>Agentic Task & Literature Analysis System</strong>
+</p>
 
-ATLAS is an intelligent research platform designed for AI researchers and engineers. It uses a multi-agent architecture to automate literature review, paper recommendation, and in-depth analysis. Built with a LangGraph-based workflow, ATLAS provides structured, high-quality outputs in various formats.
+<p align="center">
+  Turn a messy research question into searched sources, compressed context, a grounded report, a PDF, and searchable history.
+</p>
 
-ATLAS is open-source and serves the Vietnamese AI research community, but it can be easily adapted for global use. The system prioritizes academic sources and provides real-time streaming of research progress.
+<p align="center">
+  <img alt="Python 3.12" src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white">
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.129-009688?logo=fastapi&logoColor=white">
+  <img alt="LangGraph" src="https://img.shields.io/badge/LangGraph-workflow-1f6feb">
+  <img alt="Docker" src="https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white">
+  <img alt="License MIT" src="https://img.shields.io/badge/License-MIT-green">
+</p>
 
-*The initial idea of this project originated from:* 
-- The open-source project: [GPT Researcher](https://github.com/assafelovic/gpt-researcher) - Based on this project, I have made significant modifications to the architecture, workflow, and output formats to better suit the needs of AI researchers, especially in the Vietnamese community. 
-- My experience as an AI Engineer working on NLP projects at the company, where I deeply understood the company's product and what the customers needed with our product, and I wanted to build my own research assistant that forwards and centers around the needs of an AI researcher or engineer.
+ATLAS is a FastAPI-based research assistant for AI researchers and engineers. It plans research with LangGraph, searches academic sources, scrapes and compresses evidence, writes reports with citations, exports results, and keeps a searchable research history.
 
-## ✨ Key Features
+The project is built for the Vietnamese AI research community, with Vietnamese UI labels and report workflows, while the codebase can be adapted for other research teams and languages.
 
-- 🤖 **Multi-Agent Orchestration**: Specialized agents for different research tasks (Q&A, Paper Recommendations, Paper Analysis)
-- 🔄 **LangGraph Architecture**: State machine-based workflow for better maintainability and observability
-- 📊 **3 Output Formats**: Q&A, Paper Recommendations, Paper Analysis via provided URLs or general topic
-- 🔍 **Academic-First Search**: Prioritizes arXiv, OpenReview, major conferences
-- 🚀 **Parallel Search**: Search multiple queries simultaneously for improved performance
-- ⚡ **Real-time Streaming**: WebSocket-based live research progress
-- 🎯 **Quality Filtering**: Academic source ranking with tier-based scoring
-- 🇻🇳 **Vietnamese Support**: Built for Vietnamese AI research community
+## Why ATLAS
 
+Most research assistants stop at chat. ATLAS is built as a workflow:
 
-## Installation
+- It decomposes a task into focused academic search queries.
+- It favors papers, proceedings, publishers, and research labs over low-signal sources.
+- It compresses retrieved context before generation instead of dumping raw search results into the model.
+- It validates generated reports against collected source URLs.
+- It saves reports, suggested follow-up questions, PDFs, and history for later review.
 
-### Prerequisites
-- Python 3.12+
-- OpenAI API Key
-- Tavily API Key (for web search)
+## Workflow
 
-### Setup
+```mermaid
+flowchart LR
+    A[Research task] --> B[Choose agent]
+    B --> C{URLs included?}
+    C -->|Yes| D[Scrape provided sources]
+    C -->|No| E[Generate sub-queries]
+    E --> F[Parallel academic search]
+    D --> G[Compress context]
+    F --> G
+    G --> H[Generate report]
+    H --> I[Quality check]
+    I --> J[PDF + history + follow-up questions]
+```
 
-1. **Clone the repository**
+## Highlights
+
+| Area | What ATLAS does |
+| --- | --- |
+| Orchestration | LangGraph nodes for agent selection, query generation, search, context processing, and report generation. |
+| Research modes | Q&A (`hỏi đáp`), paper recommendations (`đề xuất bài báo`), and deep analysis (`phân tích`). |
+| Academic retrieval | Tavily search with DuckDuckGo fallback and academic domain filters. |
+| Source handling | Direct URL extraction, web/PDF scraping, context compression, and source-aware report structure. |
+| Performance | Parallel multi-query search, SQLite search cache, SQLite embedding cache, and optional cross-encoder reranking. |
+| Product surface | Web UI, WebSocket streaming, history sidebar, suggested questions, copy support, and PDF export. |
+| Deployment | Local Uvicorn, Docker, production Compose, SQLite persistence, and optional bearer-token auth. |
+
+## Project Layout
+
+```text
+ATLAS/
+|-- frontend/              # Jinja-served web UI assets
+|-- src/api/               # FastAPI app, routes, auth, shared dependencies
+|-- src/agents/            # LangGraph node implementations
+|-- src/orchestration/     # Workflow, routers, state, runner
+|-- src/prompts/           # YAML prompt templates and prompt registry
+|-- src/rag/               # Chunking, retrieval, embeddings, reranking
+|-- src/retrievers/        # Search providers
+|-- src/scraping/          # Web/PDF extraction helpers
+|-- src/storage/           # SQLite history and TTL cache
+|-- src/quality/           # Report validation
+|-- tests/                 # Unit and integration tests
+|-- docs/                  # Deeper implementation notes
+|-- outputs/               # Generated Markdown/PDF reports
+|-- main.py                # Local app entry point
+`-- pyproject.toml         # Project metadata and tool config
+```
+
+## Prerequisites
+
+- Python 3.12 is recommended. The package metadata allows Python 3.10+, but CI and Docker use Python 3.12.
+- OpenAI API key for the default LLM and embedding provider.
+- Tavily API key for web search.
+- Optional Gemini API key if you switch `LLM_PROVIDER=google`.
+- Optional Docker or Docker Desktop for containerized runs.
+
+## Quick Start
+
+1. Clone the repository and enter the project directory.
+
    ```bash
-   git clone https://github.com/yourusername/atlas-research.git
-   cd atlas
+   git clone <your-repo-url>
+   cd ATLAS
    ```
 
-2. **Create Python environment**
+2. Create and activate a virtual environment.
+
    ```bash
-   python3 -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   python -m venv .venv
    ```
 
-3. **Install dependencies**
+   Windows PowerShell:
+
+   ```powershell
+   .\.venv\Scripts\Activate.ps1
+   ```
+
+   macOS/Linux:
+
    ```bash
+   source .venv/bin/activate
+   ```
+
+3. Install dependencies.
+
+   ```bash
+   python -m pip install --upgrade pip
    pip install -r requirements.txt
    ```
 
-4. **Set environment variables**
-   ```bash
-   # Create .env file
-   echo "OPENAI_API_KEY=your_key_here" >> .env
-   echo "TAVILY_API_KEY=your_key_here" >> .env
+4. Create your environment file.
+
+   Windows PowerShell:
+
+   ```powershell
+   Copy-Item .env.example .env
    ```
 
-## 🚀 Usage
+   macOS/Linux:
 
-### Run Locally
+   ```bash
+   cp .env.example .env
+   ```
 
-**Method 1: Direct Python**
+   Edit `.env` and set at least:
+
+   ```env
+   OPENAI_API_KEY=your_openai_key
+   TAVILY_API_KEY=your_tavily_key
+   ```
+
+5. Create a local runtime config.
+
+   ```bash
+   cp config.json.example config.json
+   ```
+
+   On Windows PowerShell:
+
+   ```powershell
+   Copy-Item config.json.example config.json
+   ```
+
+   The current web research runner passes `config.json` explicitly when starting a job, so create this file before submitting tasks.
+
+6. Start the app.
+
+   ```bash
+   python main.py
+   ```
+
+   Or run Uvicorn directly:
+
+   ```bash
+   python -m uvicorn src.api.server:app --reload
+   ```
+
+7. Open the web UI.
+
+   ```text
+   http://127.0.0.1:8000
+   ```
+
+## Configuration
+
+ATLAS initializes config fields from environment variables, then loads `config.json`, and finally applies mode-specific overrides for each research mode. For overlapping config fields, the current `config.json` values override matching environment variables.
+
+Common environment variables:
+
+| Variable | Purpose |
+| --- | --- |
+| `OPENAI_API_KEY` | Required for default OpenAI LLM and embeddings. |
+| `TAVILY_API_KEY` | Required for Tavily search. |
+| `GEMINI_API_KEY` | Required when `LLM_PROVIDER=google`. |
+| `LLM_PROVIDER` | `openai` or `google`. Defaults to `openai`. |
+| `LLM_MODEL` | Chat model name. Defaults to `gpt-4o-mini`. |
+| `EMBEDDING_PROVIDER` | `openai` or `huggingface`. Defaults to `openai`. |
+| `ATLAS_AUTH_TOKEN` | Enables bearer-token auth for REST and WebSocket routes when set. |
+| `CORS_ORIGINS` | Comma-separated allowed origins. Defaults to local app origins. |
+| `REQUIRE_API_KEYS` | Set `true` in production to fail fast when required keys are missing. |
+| `HISTORY_DB_PATH` | SQLite history path. Defaults to `.atlas_data/history.sqlite`. |
+| `ATLAS_CACHE_DB` | SQLite cache path. Defaults to `.atlas_cache/cache.sqlite`. |
+| `ENABLE_SEARCH_CACHE` | Enables cached search results. Defaults to `true` at runtime. |
+| `ENABLE_EMBEDDING_CACHE` | Enables cached embeddings. Defaults to `true` at runtime. |
+| `ENABLE_CROSS_ENCODER_RERANKING` | Enables local cross-encoder reranking when dependencies/model are available. |
+| `ENABLE_PARALLEL_SEARCH` | Enables parallel search for multi-query modes. Defaults to `true`. |
+| `ATLAS_LOG_LEVEL` | Logging level for ATLAS modules. Defaults to `INFO`. |
+
+Runtime configuration values such as token limits, chunking, similarity threshold, report format, max search results, and total report words can be set in `config.json` or through matching environment variables. Use `config.json.example` as the starting point.
+
+## Research Modes
+
+| Mode value | UI label | Behavior |
+| --- | --- | --- |
+| `hỏi đáp` | Hỏi đáp | Fast Q&A. Generates one extra search query plus the original query, uses fewer results, and targets shorter answers. |
+| `đề xuất bài báo` | Đề xuất bài báo | Paper recommendation mode. Generates a broader set of academic queries and produces a longer reading list. |
+| `phân tích` | Phân tích | Deep analysis mode. With URLs, analyzes the provided source or paper directly. Without URLs, performs topic analysis across multiple sources. |
+
+The app automatically extracts URLs from the task text. If URLs are present, the workflow skips query generation and scrapes the provided sources directly.
+
+## Example Prompts
+
+Use these as starting points:
+
+| Goal | Mode | Prompt |
+| --- | --- | --- |
+| Quick technical answer | `hỏi đáp` | `What is speculative decoding, and when does it help LLM serving?` |
+| Reading list | `đề xuất bài báo` | `Recommend recent papers on agentic RAG systems with code or benchmarks.` |
+| Topic deep dive | `phân tích` | `Compare GraphRAG, RAPTOR, and standard vector RAG for long-context QA.` |
+| Paper/source analysis | `phân tích` | `Analyze this paper and explain the implementation details: https://arxiv.org/abs/...` |
+
+## Usage
+
+### Web UI
+
+1. Enter a research question, topic, or prompt with URLs.
+2. Choose a research mode.
+3. Submit the task and watch progress stream in real time.
+4. Review the generated report, quality check, suggested follow-up questions, and exported PDF/Markdown file.
+5. Use the history sidebar to search, reopen, export, or delete previous runs.
+
+Generated files are written to `outputs/`. Research history is stored in SQLite under `.atlas_data/` by default.
+
+### WebSocket API
+
+Connect to:
+
+```text
+ws://127.0.0.1:8000/ws
+```
+
+Send a message with the `start ` prefix:
+
+```text
+start {"task": "Compare LoRA and adapter tuning", "report_type": "phân tích"}
+```
+
+The server streams JSON messages such as:
+
+- `history_id`: ID of the created history entry.
+- `logs`: progress updates.
+- `report`: report content streamed from the LLM.
+- `quality_check`: report validation metadata.
+- `suggested_questions`: follow-up questions.
+- `path`: generated PDF or Markdown path.
+
+When `ATLAS_AUTH_TOKEN` is set, pass the token as either `Authorization: Bearer <token>` or `?token=<token>`.
+
+### History REST API
+
+History endpoints are mounted under `/api/history`:
+
+```text
+GET    /api/history
+GET    /api/history?limit=10
+GET    /api/history/stats
+GET    /api/history/search/{search_term}
+GET    /api/history/{entry_id}
+GET    /api/history/export
+DELETE /api/history/{entry_id}
+DELETE /api/history
+```
+
+These routes use the same optional bearer-token auth as the WebSocket route.
+
+## Docker
+
+For local Docker Compose:
+
 ```bash
-python main.py
+docker compose up -d --build
 ```
 
-**Method 2: Uvicorn (recommended)**
+For production-style Compose:
+
 ```bash
-python -m uvicorn src.api.server:app --reload
+docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-**Method 3: Docker**
+The production compose file:
+
+- binds the app to `127.0.0.1:8000`,
+- enables required API-key validation,
+- stores history in `.atlas_data/`,
+- stores cache data in `.atlas_cache/`,
+- enables search and embedding caches,
+- enables cross-encoder reranking,
+- persists generated reports in `outputs/`.
+
+If your Docker installation uses the legacy command, replace `docker compose` with `docker-compose`.
+
+## Development
+
+Install the same dependencies used in CI:
+
 ```bash
-docker-compose up -d --build
+pip install -r requirements.txt
 ```
 
-Then open `http://localhost:8000` in your browser.
+Run the checks:
 
-### Choose Research Mode
-
-ATLAS operates in **three distinct modes**, each optimized for different research needs:
-
-1. ⚡ **Hỏi đáp (Q&A)** - Fast, concise answers (Priority: Speed > Accuracy > Conciseness)
-   - 2 total sub-queries (1 generated + original), ~700 words
-   - Use when: You need quick answers to specific questions
-   
-2. 📚 **Đề xuất bài báo (Paper Recommendations)** - Comprehensive paper lists (Priority: Depth > Accuracy > Thoroughness)
-   - 4 total sub-queries (3 generated + original), ~2000 words
-   - Use when: You need a reading list with papers + code
-   
-3. 🔬 **Phân tích (Analysis)** - Deep analysis with comparisons (Priority: Depth > Accuracy > Insights > Structure)
-   - 6 total sub-queries (5 generated + original), ~3000 words
-   - Use when: You need comprehensive analysis, comparisons, and insights
-
-## 🏗️ Architecture
-
-### LangGraph Workflow
-
-ATLAS uses a **LangGraph-based architecture** to orchestrate the multi-agent workflow. Each research task is represented as a node in the graph, with defined inputs, outputs, and state transitions.
-
-![LangGraph Workflow Diagram](images/langgraph_workflow.png)
-
-### System Components
-
-```
-ATLAS
-├── Mode Configuration
-│   ├── Hỏi đáp (Q&A) — Quick answers
-│   ├── Đề xuất bài báo — Comprehensive recommendations
-│   └── Phân tích — In-depth analysis (specific paper via URLs or a general topic)
-│
-├── LangGraph Workflow Engine
-│   ├── State Schema (TypedDict)
-│   ├── Nodes (choose_agent, generate_sub_queries, search_and_scrape, etc.)
-│   ├── Conditional Routing (parallel / sequential search)
-│   ├── Context Processing (semantic compression, relevance scoring)
-│   └── Output Formatting & Summarization
-│
-├── Search & Retrieval
-│   ├── Parallel Search Engine (asyncio-based)
-│   ├── Sequential Search (fallback)
-│   └── Tavily Search Integration
-│
-├── Academic Filter (Tier-based scoring)
-│   ├── Tier 1: arXiv, OpenReview, ACL Anthology, etc.
-│   ├── Tier 2: IEEE, ACM, Springer, Nature, Science, etc.
-│   ├── Tier 3: Google Scholar, ResearchGate, etc.
-│   ├── Tier 4: Google Blog, DeepMind, Meta AI, etc.
-│   └── Blacklist: Medium, TowardsDataScience, etc.
-│
-├── Context Management
-│   └── Semantic Compression
-│
-└── Output Generation
-    └── 4 specialized formats
+```bash
+python -m compileall -q src main.py
+ruff check src tests main.py
+python -m pytest
 ```
 
-## 🤝 Contributing
+Useful local test settings:
 
-This project serves the Vietnamese AI research community. Contributions welcome!
+```env
+ENABLE_SEARCH_CACHE=false
+ENABLE_EMBEDDING_CACHE=false
+ENABLE_CROSS_ENCODER_RERANKING=false
+```
 
-## 📄 License
+Most tests mock external providers, but setting placeholder API keys can make local runs match CI:
 
-MIT License - See LICENSE file for details.
+```env
+OPENAI_API_KEY=test-openai-key
+TAVILY_API_KEY=test-tavily-key
+GEMINI_API_KEY=test-gemini-key
+```
 
----
+## Contributor Notes
 
-**Built with ❤️ for the AI research community**
+- Keep changes aligned with the existing module boundaries: API routes in `src/api`, workflow logic in `src/orchestration`, node behavior in `src/agents`, prompts in `src/prompts/templates`, and storage concerns in `src/storage`.
+- Prefer adding focused tests in `tests/` for workflow routing, config behavior, provider wrappers, storage, and report validation changes.
+- Prompt changes should be made in YAML templates and covered by prompt registry tests when behavior changes.
+- Avoid committing generated runtime data from `.atlas_cache/`, `.atlas_data/`, or `outputs/`.
+- Run `ruff check src tests main.py` and `python -m pytest` before opening a pull request.
+
+## Further Reading
+
+- `docs/LANGGRAPH.md` for the workflow structure.
+- `docs/MODES.md` for research mode behavior.
+- `docs/ANALYSIS_MODE.md` for topic vs paper analysis details.
+- `docs/PARALLEL_SEARCH.md` for concurrent search behavior.
+- `docs/DOCKER_COMMANDS.md` and `docs/DOCKER_SETUP_GUIDE.md` for deployment commands.
+
+## Troubleshooting
+
+- Missing `TAVILY_API_KEY`: search cannot start unless Tavily is configured. The retriever can fall back to DuckDuckGo only after Tavily is initialized.
+- Missing `OPENAI_API_KEY`: default LLM and embeddings will fail. Set `LLM_PROVIDER=google` only when Gemini is configured.
+- Port already in use: run Uvicorn with another port, for example `python -m uvicorn src.api.server:app --reload --port 8001`.
+- Unauthorized API/WebSocket response: remove `ATLAS_AUTH_TOKEN` for local development or pass the configured token.
+- PDF export fallback: if PyMuPDF cannot render a PDF, ATLAS returns the generated Markdown path instead.
+
+## Acknowledgements
+
+The initial idea was inspired by [GPT Researcher](https://github.com/assafelovic/gpt-researcher). ATLAS builds on that general direction with a LangGraph-based workflow, Vietnamese research-oriented UI, mode-specific report behavior, academic source filtering, history storage, and PDF export.
+
+## License
+
+MIT License. See `LICENSE` for details.
