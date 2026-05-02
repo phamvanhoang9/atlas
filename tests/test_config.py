@@ -29,6 +29,9 @@ def test_default_config_file_is_optional():
     config = Config()
     assert config.retriever == "tavily"
     assert config.llm_model == "gpt-4o-mini"
+    assert config.enable_evaluation is False
+    assert config.evaluation_mode == "online"
+    assert config.eval_top_k == 3
 
 def test_explicit_missing_config_file_raises():
     with pytest.raises(FileNotFoundError):
@@ -42,6 +45,24 @@ def test_config_env_vars():
             config = Config(config_file="non_existent.json")
             assert config.retriever == "tavily"
             assert config.token_limit == 9999
+
+@patch.dict(
+    os.environ,
+    {
+        "ENABLE_EVALUATION": "true",
+        "EVALUATION_MODE": "both",
+        "EVAL_TOP_K": "5",
+        "EVAL_FAIL_THRESHOLDS": '{"min_faithfulness": 0.9}',
+    },
+)
+def test_evaluation_config_env_vars():
+    with patch("os.path.exists", return_value=True), patch("builtins.open", MagicMock()):
+        with patch("json.load", return_value={}):
+            config = Config(config_file="non_existent.json")
+            assert config.enable_evaluation is True
+            assert config.evaluation_mode == "both"
+            assert config.eval_top_k == 5
+            assert config.eval_fail_thresholds["min_faithfulness"] == 0.9
 
 def test_apply_mode_config():
     with patch("os.path.exists", return_value=True), patch("builtins.open", MagicMock()):
@@ -80,3 +101,7 @@ def clean_env(monkeypatch):
     monkeypatch.delenv("TOKEN_LIMIT", raising=False)
     monkeypatch.delenv("CONFIG_FILE", raising=False)
     monkeypatch.delenv("REQUIRE_API_KEYS", raising=False)
+    monkeypatch.delenv("ENABLE_EVALUATION", raising=False)
+    monkeypatch.delenv("EVALUATION_MODE", raising=False)
+    monkeypatch.delenv("EVAL_TOP_K", raising=False)
+    monkeypatch.delenv("EVAL_FAIL_THRESHOLDS", raising=False)

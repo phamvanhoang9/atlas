@@ -56,11 +56,13 @@ class LangGraphResearcher:
         )
 
         self.memory = Memory(self.cfg.embedding_provider)
-        self.workflow = build_workflow(enable_parallel_search=self.enable_parallel_search)
+        self.workflow = build_workflow(
+            enable_parallel_search=self.enable_parallel_search,
+            enable_evaluation=self.cfg.enable_evaluation,
+        )
 
-    async def run(self) -> str:
-        """Execute the research workflow and return the report."""
-        initial_state: ResearchState = {
+    def _initial_state(self) -> ResearchState:
+        return {
             "query": self.query,
             "report_type": self.report_type,
             "source_urls": self.source_urls,
@@ -77,6 +79,10 @@ class LangGraphResearcher:
             "websocket": self.websocket,
             "memory": self.memory,
         }
+
+    async def run_with_state(self) -> ResearchState:
+        """Execute the research workflow and return the final state."""
+        initial_state = self._initial_state()
 
         final_state = None
         start = time.perf_counter()
@@ -106,7 +112,12 @@ class LangGraphResearcher:
                 len(report),
                 (time.perf_counter() - start) * 1000,
             )
-            return report
+            return last_state
 
         logger.warning("Workflow finished without final state elapsed_ms=%.1f", (time.perf_counter() - start) * 1000)
-        return ""
+        return initial_state
+
+    async def run(self) -> str:
+        """Execute the research workflow and return the report."""
+        final_state = await self.run_with_state()
+        return final_state.get("report", "")

@@ -63,12 +63,15 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             logger.info("Research job PDF exported id=%s path=%s", request_id, path)
 
             suggested_questions = deps.manager.suggested_questions.get(websocket, [])
+            evaluation_results = getattr(deps.manager, "evaluation_results", {})
+            evaluation_result = evaluation_results.get(websocket, {})
             await deps.run_sync(
                 deps.history_manager.update_entry,
                 history_id,
                 report=report,
                 pdf_path=path,
                 suggested_questions=suggested_questions,
+                evaluation_result=evaluation_result,
             )
 
             await websocket.send_json({"type": "path", "output": path})

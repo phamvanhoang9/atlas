@@ -13,13 +13,15 @@ from src.orchestration.router import (
     route_search_mode,
 )
 from src.orchestration.state import ResearchState
+from src.quality.evaluation.evaluator import evaluate_state_node
 
 
-def build_workflow(*, enable_parallel_search: bool = True) -> StateGraph:
+def build_workflow(*, enable_parallel_search: bool = True, enable_evaluation: bool = False) -> StateGraph:
     """Construct and compile the research workflow graph.
 
     Args:
         enable_parallel_search: Whether to allow parallel multi-query search.
+        enable_evaluation: Whether to run optional online evaluation after report generation.
 
     Returns:
         A compiled LangGraph ``StateGraph``.
@@ -33,6 +35,8 @@ def build_workflow(*, enable_parallel_search: bool = True) -> StateGraph:
     graph.add_node("search_and_scrape", search_and_scrape_node)
     graph.add_node("process_context", process_context_node)
     graph.add_node("generate_report", generate_report_node)
+    if enable_evaluation:
+        graph.add_node("evaluate_report", evaluate_state_node)
 
     # --- edges ---
     graph.set_entry_point("choose_agent")
@@ -59,6 +63,10 @@ def build_workflow(*, enable_parallel_search: bool = True) -> StateGraph:
     )
 
     graph.add_edge("process_context", "generate_report")
-    graph.add_edge("generate_report", END)
+    if enable_evaluation:
+        graph.add_edge("generate_report", "evaluate_report")
+        graph.add_edge("evaluate_report", END)
+    else:
+        graph.add_edge("generate_report", END)
 
     return graph.compile()

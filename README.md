@@ -73,7 +73,7 @@ ATLAS/
 |-- src/storage/           # SQLite history and TTL cache
 |-- src/quality/           # Report validation
 |-- tests/                 # Unit and integration tests
-|-- docs/                  # Deeper implementation notes
+|-- docs/                  # Agent memory and project guidance
 |-- outputs/               # Generated Markdown/PDF reports
 |-- main.py                # Local app entry point
 `-- pyproject.toml         # Project metadata and tool config
@@ -350,11 +350,12 @@ GEMINI_API_KEY=test-gemini-key
 
 ## Further Reading
 
-- `docs/LANGGRAPH.md` for the workflow structure.
-- `docs/MODES.md` for research mode behavior.
-- `docs/ANALYSIS_MODE.md` for topic vs paper analysis details.
-- `docs/PARALLEL_SEARCH.md` for concurrent search behavior.
-- `docs/DOCKER_COMMANDS.md` and `docs/DOCKER_SETUP_GUIDE.md` for deployment commands.
+- `AGENTS.md` for repository guidance used by coding agents.
+- `RELEASE.md` for tag-driven release steps and release safety checks.
+- `docs/agent-memory/PROJECT_STATE.md` for the current project state.
+- `docs/agent-memory/DECISIONS.md` for durable architecture and process decisions.
+- `docs/agent-memory/NEXT_STEPS.md` for open follow-up work.
+- `docs/agent-memory/TASK_LOG.md` for recent agent work summaries.
 
 ## Troubleshooting
 

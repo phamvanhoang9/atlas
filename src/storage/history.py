@@ -35,10 +35,19 @@ class SQLiteHistoryManager:
                     report TEXT NOT NULL,
                     suggested_questions TEXT NOT NULL,
                     pdf_path TEXT NOT NULL,
-                    preview TEXT NOT NULL
+                    preview TEXT NOT NULL,
+                    evaluation_result TEXT NOT NULL DEFAULT '{}'
                 )
                 """
             )
+            columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(history)").fetchall()
+            }
+            if "evaluation_result" not in columns:
+                connection.execute(
+                    "ALTER TABLE history ADD COLUMN evaluation_result TEXT NOT NULL DEFAULT '{}'"
+                )
             connection.execute("CREATE INDEX IF NOT EXISTS idx_history_timestamp ON history(timestamp DESC)")
 
     def _row_to_entry(self, row: sqlite3.Row) -> dict[str, Any]:
@@ -51,6 +60,7 @@ class SQLiteHistoryManager:
             "suggested_questions": json.loads(row["suggested_questions"]),
             "pdf_path": row["pdf_path"],
             "preview": row["preview"],
+            "evaluation_result": json.loads(row["evaluation_result"]),
         }
 
     def add_entry(
@@ -60,6 +70,7 @@ class SQLiteHistoryManager:
         report: str = "",
         suggested_questions: Optional[list[str]] = None,
         pdf_path: str = "",
+        evaluation_result: Optional[dict[str, Any]] = None,
     ) -> str:
         entry_id = str(uuid.uuid4())
         preview = self._generate_preview(report)
@@ -67,8 +78,8 @@ class SQLiteHistoryManager:
             connection.execute(
                 """
                 INSERT INTO history (
-                    id, timestamp, query, mode, report, suggested_questions, pdf_path, preview
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    id, timestamp, query, mode, report, suggested_questions, pdf_path, preview, evaluation_result
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     entry_id,
@@ -79,6 +90,7 @@ class SQLiteHistoryManager:
                     json.dumps(suggested_questions or [], ensure_ascii=False),
                     pdf_path,
                     preview,
+                    json.dumps(evaluation_result or {}, ensure_ascii=False),
                 ),
             )
         return entry_id
@@ -89,6 +101,7 @@ class SQLiteHistoryManager:
         report: Optional[str] = None,
         suggested_questions: Optional[list[str]] = None,
         pdf_path: Optional[str] = None,
+        evaluation_result: Optional[dict[str, Any]] = None,
     ) -> None:
         existing = self.get_entry(entry_id)
         if existing is None:
@@ -97,12 +110,15 @@ class SQLiteHistoryManager:
         updated_report = report if report is not None else existing["report"]
         updated_questions = suggested_questions if suggested_questions is not None else existing["suggested_questions"]
         updated_pdf_path = pdf_path if pdf_path is not None else existing["pdf_path"]
+        updated_evaluation = (
+            evaluation_result if evaluation_result is not None else existing.get("evaluation_result", {})
+        )
 
         with self._lock, self._connect() as connection:
             connection.execute(
                 """
                 UPDATE history
-                SET report = ?, suggested_questions = ?, pdf_path = ?, preview = ?
+                SET report = ?, suggested_questions = ?, pdf_path = ?, preview = ?, evaluation_result = ?
                 WHERE id = ?
                 """,
                 (
@@ -110,6 +126,7 @@ class SQLiteHistoryManager:
                     json.dumps(updated_questions, ensure_ascii=False),
                     updated_pdf_path,
                     self._generate_preview(updated_report),
+                    json.dumps(updated_evaluation, ensure_ascii=False),
                     entry_id,
                 ),
             )

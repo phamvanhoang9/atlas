@@ -21,6 +21,7 @@ class WebSocketManager:
         self.sender_tasks: Dict[WebSocket, asyncio.Task] = {}
         self.message_queues: Dict[WebSocket, asyncio.Queue] = {}
         self.suggested_questions: Dict[WebSocket, List[str]] = {}
+        self.evaluation_results: Dict[WebSocket, dict[str, Any]] = {}
 
     async def _sender_loop(self, websocket: WebSocket) -> None:
         """Background task that drains the message queue for *websocket*."""
@@ -43,6 +44,7 @@ class WebSocketManager:
         self.active_connections.append(websocket)
         self.message_queues[websocket] = asyncio.Queue()
         self.suggested_questions[websocket] = []
+        self.evaluation_results[websocket] = {}
         self.sender_tasks[websocket] = asyncio.create_task(self._sender_loop(websocket))
         logger.info("WebSocket manager connected active_connections=%s", len(self.active_connections))
 
@@ -54,6 +56,8 @@ class WebSocketManager:
             del self.sender_tasks[websocket]
             if websocket in self.suggested_questions:
                 del self.suggested_questions[websocket]
+            if websocket in self.evaluation_results:
+                del self.evaluation_results[websocket]
             del self.message_queues[websocket]
             logger.info("WebSocket manager disconnected active_connections=%s", len(self.active_connections))
 
@@ -115,6 +119,10 @@ class _WebsocketWrapper:
             questions = data.get("output", [])
             if isinstance(questions, list):
                 self.mgr.suggested_questions[self.original_ws] = questions
+        if data.get("type") == "evaluation" and self.mgr and self.original_ws:
+            output = data.get("output", {})
+            if isinstance(output, dict):
+                self.mgr.evaluation_results[self.original_ws] = output
         return await self.ws.send_json(data)
 
     async def send_text(self, data: str) -> None:

@@ -35,6 +35,13 @@ class ConfigSchema(BaseModel):
     max_iterations: int = Field(default=4, ge=0)
     agent_role: str | None = None
     enable_parallel_search: bool = True
+    enable_evaluation: bool = False
+    evaluation_mode: str = "online"
+    eval_llm_provider: str = "openai"
+    eval_llm_model: str = ""
+    eval_embedding_model: str = ""
+    eval_top_k: int = Field(default=3, gt=0)
+    eval_fail_thresholds: dict = Field(default_factory=dict)
     llm_kwargs: dict = Field(default_factory=dict)
 
     @field_validator("retriever")
@@ -56,6 +63,20 @@ class ConfigSchema(BaseModel):
     def validate_llm_provider(cls, value: str) -> str:
         if value not in {"openai", "google"}:
             raise ValueError("llm_provider must be one of: openai, google")
+        return value
+
+    @field_validator("evaluation_mode")
+    @classmethod
+    def validate_evaluation_mode(cls, value: str) -> str:
+        if value not in {"online", "offline", "both"}:
+            raise ValueError("evaluation_mode must be one of: online, offline, both")
+        return value
+
+    @field_validator("eval_llm_provider")
+    @classmethod
+    def validate_eval_llm_provider(cls, value: str) -> str:
+        if value not in {"openai", "google"}:
+            raise ValueError("eval_llm_provider must be one of: openai, google")
         return value
 
 
@@ -109,6 +130,14 @@ class Config:
         
         # Parallel search optimization: Enable parallel execution of multiple queries
         self.enable_parallel_search = os.getenv('ENABLE_PARALLEL_SEARCH', 'true').lower() == 'true'
+
+        self.enable_evaluation = os.getenv('ENABLE_EVALUATION', 'false').lower() == 'true'
+        self.evaluation_mode = os.getenv('EVALUATION_MODE', 'online')
+        self.eval_llm_provider = os.getenv('EVAL_LLM_PROVIDER', 'openai')
+        self.eval_llm_model = os.getenv('EVAL_LLM_MODEL', '')
+        self.eval_embedding_model = os.getenv('EVAL_EMBEDDING_MODEL', '')
+        self.eval_top_k = int(os.getenv('EVAL_TOP_K', 3))
+        self.eval_fail_thresholds = self._load_eval_thresholds(os.getenv('EVAL_FAIL_THRESHOLDS'))
         
         # Load config file FIRST (so mode configs can override it)
         self.load_config_file()
@@ -166,6 +195,17 @@ class Config:
             config = json.load(f)
         for key, value in config.items():
             self.__dict__[key] = value
+
+    def _load_eval_thresholds(self, raw_value: str | None) -> dict:
+        if not raw_value:
+            return {}
+        try:
+            parsed = json.loads(raw_value)
+        except json.JSONDecodeError as exc:
+            raise ConfigError("EVAL_FAIL_THRESHOLDS must be a JSON object") from exc
+        if not isinstance(parsed, dict):
+            raise ConfigError("EVAL_FAIL_THRESHOLDS must be a JSON object")
+        return parsed
 
     def validate(self) -> None:
         """Validate loaded environment and config-file values."""

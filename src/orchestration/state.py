@@ -1,4 +1,4 @@
-from typing import Any, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 from src.config import Config
 from src.memory import Memory
@@ -26,3 +26,5 @@ class ResearchState(TypedDict):
     cfg: Config
     websocket: Any
     memory: Memory
+    evaluation_result: NotRequired[dict[str, Any]]
+    history_id: NotRequired[str]
