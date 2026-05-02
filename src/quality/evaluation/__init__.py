@@ -1,5 +1,5 @@
-from src.quality.evaluation.evaluator import EvaluationRunner, contexts_from_strings, load_golden_dataset
-from src.quality.evaluation.schemas import (
+from .evaluator import EvaluationRunner, contexts_from_strings, load_golden_dataset
+from .schemas import (
     EvaluationInput,
     EvaluationResult,
     EvaluationRunSummary,

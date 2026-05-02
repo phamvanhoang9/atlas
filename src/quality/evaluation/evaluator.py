@@ -7,23 +7,23 @@ from collections.abc import Awaitable, Callable, Sequence
 from pathlib import Path
 from typing import Any
 
-from src.quality import ReportValidator
-from src.quality.evaluation.generation_metrics import (
+from .. import ReportValidator
+from .generation_metrics import (
     answer_correctness_metric,
     answer_relevance_llm,
     citation_coverage_metric,
     conversational_faithfulness_llm,
     unsupported_claim_count_metric,
 )
-from src.quality.evaluation.ragas_adapter import RagasAdapter
-from src.quality.evaluation.refusal_metrics import (
+from .ragas_adapter import RagasAdapter
+from .refusal_metrics import (
     over_answering_rate,
     refusal_accuracy,
     source_scope_adherence,
     vietnamese_quality_check,
 )
-from src.quality.evaluation.report import summarize_failure_modes
-from src.quality.evaluation.retrieval_metrics import (
+from .report import summarize_failure_modes
+from .retrieval_metrics import (
     context_precision_metric,
     context_recall_from_ground_truth,
     context_relevance_llm,
@@ -31,7 +31,7 @@ from src.quality.evaluation.retrieval_metrics import (
     noise_ratio_metric,
     recall_at_k_metric,
 )
-from src.quality.evaluation.schemas import (
+from .schemas import (
     EvaluationInput,
     EvaluationResult,
     EvaluationRunSummary,
@@ -350,7 +350,7 @@ def _build_llm_judge_from_config(cfg: Any) -> Callable[[str], Awaitable[str]] | 
         provider = getattr(cfg, "llm_provider", "openai")
 
     async def _judge(prompt: str) -> str:
-        from src.llm.completion import create_chat_completion
+        from ...llm.completion import create_chat_completion
 
         return await create_chat_completion(
             model=model,
@@ -372,7 +372,7 @@ def _build_llm_judge_from_config(cfg: Any) -> Callable[[str], Awaitable[str]] | 
 if __name__ == "__main__":
     import argparse
 
-    from src.quality.evaluation.report import evaluation_summary_to_json, render_summary_markdown
+    from .report import evaluation_summary_to_json, render_summary_markdown
 
     parser = argparse.ArgumentParser(description="Run ATLAS golden dataset evaluation.")
     parser.add_argument("dataset", help="Path to a JSONL golden evaluation dataset.")

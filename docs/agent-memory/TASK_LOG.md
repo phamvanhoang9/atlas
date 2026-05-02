@@ -1,5 +1,12 @@
 # Task Log
 
+## 2026-05-02 - Suppressed Python 3.14 Compatibility Warnings
+- Added `filterwarnings` to `pytest.ini` to suppress `UserWarning` and `DeprecationWarning` triggered by Python 3.14 in external dependencies (`langchain-core`, `google-genai`, `swig`).
+- These warnings were identified as coming from third-party libraries not yet fully updated for the pre-release Python 3.14 environment.
+
+Verification:
+- Ran `.\.venv\Scripts\python.exe -m pytest .\tests\`; all 68 tests passed with 0 warnings.
+
 ## 2026-05-01 - Finalized Evaluation Framework & Golden Dataset
 - Created a canonical `golden_dataset.jsonl` focusing on AI research topics (RoPE, RLHF, Contrastive Learning) to align with ATLAS's academic/AI researcher target audience.
 - Documented RAGAS best-effort setup and offline vs online evaluation via `EVAL_LLM_MODEL` in `docs/EVALUATION.md`.
