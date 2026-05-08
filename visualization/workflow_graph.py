@@ -160,7 +160,7 @@ def main() -> None:
     output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    workflow = build_workflow(enable_parallel_search=not args.no_parallel_search)
+    workflow = build_workflow(enable_parallel_search=not args.no_parallel_search, enable_evaluation=True)
     graph = workflow.get_graph()
     mermaid_source = graph.draw_mermaid()
 

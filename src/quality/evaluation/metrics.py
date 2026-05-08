@@ -59,15 +59,6 @@ def normalize_label(value: Any, fallback: str) -> str:
     return label if label in {"pass", "warn", "fail", "skipped"} else fallback
 
 
-def inverse_label_from_count(count: int, max_pass: int, warn_count: int | None = None) -> str:
-    warn = warn_count if warn_count is not None else max_pass + 2
-    if count <= max_pass:
-        return "pass"
-    if count <= warn:
-        return "warn"
-    return "fail"
-
-
 def tokenize(text: str) -> list[str]:
     tokens = re.findall(r"[\w]+", strip_accents(text.lower()), flags=re.UNICODE)
     return [token for token in tokens if len(token) > 1 and token not in _STOPWORDS]

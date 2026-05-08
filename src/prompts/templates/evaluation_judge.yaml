@@ -1,10 +1,32 @@
 name: evaluation_judge
-description: Strict JSON judge prompt for ATLAS RAG evaluation.
+description: RAG Triad chain-of-thought judge prompt for ATLAS evaluation.
 template: |
-  You are evaluating an ATLAS research RAG output.
+  You are a RAG evaluation judge using the RAG Triad framework.
 
-  Task:
+  ## Task
   $task
+
+  ## Scoring criteria by metric type
+
+  **Context Relevance** — Do the retrieved contexts contain information needed to answer the query?
+  - 1.0: All contexts are directly on-topic and necessary
+  - 0.7–0.9: Most contexts are relevant; minor noise
+  - 0.4–0.6: Mixed — some relevant, some off-topic
+  - 0.0–0.3: Contexts are largely irrelevant to the query
+
+  **Faithfulness** — Are the claims in the response grounded in the retrieved contexts?
+  - 1.0: Every factual claim is explicitly supported by a context passage
+  - 0.7–0.9: Most claims supported; 1–2 minor unsupported details
+  - 0.4–0.6: Several claims lack context support (potential hallucinations)
+  - 0.0–0.3: Many claims contradict or are absent from context
+
+  **Answer Relevance** — Does the response directly address the user's query intent?
+  - 1.0: Fully answers the query with no off-topic content
+  - 0.7–0.9: Mostly answers; minor tangents
+  - 0.4–0.6: Partially answers; misses key aspects
+  - 0.0–0.3: Does not answer the query
+
+  ## Input
 
   Query:
   $query
@@ -18,17 +40,27 @@ template: |
   Claims to judge:
   $claims
 
-  Return only strict JSON. Do not wrap it in Markdown. Do not include prose outside JSON.
-  Use this exact shape:
+  ## Instructions
+
+  Think step-by-step:
+  1. Identify what the query is asking for.
+  2. Check whether the contexts contain the needed information.
+  3. For each claim in the response, verify if it is supported, contradicted, or not addressed by the contexts.
+  4. Assess whether the response answers the user's intent.
+  5. Assign a score 0.0–1.0 based on the criteria above.
+
+  Return ONLY strict JSON — no prose, no markdown fences:
   {
     "score": 0.0,
     "label": "pass|warn|fail",
-    "reason": "short explanation",
+    "reason": "one-sentence explanation referencing specific evidence",
     "evidence": [
       {
-        "claim": "...",
+        "claim": "exact claim text",
         "status": "supported|contradicted|not_enough_evidence",
-        "supporting_context_ids": ["..."]
+        "supporting_context_ids": ["0", "1"]
       }
     ]
   }
+
+  Label mapping: score >= 0.75 → "pass", score >= 0.55 → "warn", score < 0.55 → "fail".

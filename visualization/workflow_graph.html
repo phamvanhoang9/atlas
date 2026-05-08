@@ -69,7 +69,7 @@
 <body>
   <header>
     <h1>ATLAS LangGraph Workflow</h1>
-    <p>Generated from <code>build_workflow(...).get_graph()</code>. Nodes: 8. Edges: 10.</p>
+    <p>Generated from <code>build_workflow(...).get_graph()</code>. Nodes: 9. Edges: 11.</p>
   </header>
   <main>
     <section class="diagram">
@@ -86,16 +86,18 @@ graph TD;
 	search_and_scrape(search_and_scrape)
 	process_context(process_context)
 	generate_report(generate_report)
+	evaluate_report(evaluate_report)
 	__end__([&lt;p&gt;__end__&lt;/p&gt;]):::last
 	__start__ --&gt; choose_agent;
 	choose_agent -. &amp;nbsp;generate_queries&amp;nbsp; .-&gt; generate_sub_queries;
 	choose_agent -. &amp;nbsp;use_provided_urls&amp;nbsp; .-&gt; search_and_scrape;
+	generate_report --&gt; evaluate_report;
 	generate_sub_queries -. &amp;nbsp;parallel_search&amp;nbsp; .-&gt; parallel_search_and_scrape;
 	generate_sub_queries -. &amp;nbsp;sequential_search&amp;nbsp; .-&gt; search_and_scrape;
 	parallel_search_and_scrape --&gt; process_context;
 	process_context --&gt; generate_report;
 	search_and_scrape -.-&gt; process_context;
-	generate_report --&gt; __end__;
+	evaluate_report --&gt; __end__;
 	search_and_scrape -. &amp;nbsp;continue_search&amp;nbsp; .-&gt; search_and_scrape;
 	classDef default fill:#f2f0ff,line-height:1.2
 	classDef first fill-opacity:0
@@ -117,16 +119,18 @@ graph TD;
 	search_and_scrape(search_and_scrape)
 	process_context(process_context)
 	generate_report(generate_report)
+	evaluate_report(evaluate_report)
 	__end__([&lt;p&gt;__end__&lt;/p&gt;]):::last
 	__start__ --&gt; choose_agent;
 	choose_agent -. &amp;nbsp;generate_queries&amp;nbsp; .-&gt; generate_sub_queries;
 	choose_agent -. &amp;nbsp;use_provided_urls&amp;nbsp; .-&gt; search_and_scrape;
+	generate_report --&gt; evaluate_report;
 	generate_sub_queries -. &amp;nbsp;parallel_search&amp;nbsp; .-&gt; parallel_search_and_scrape;
 	generate_sub_queries -. &amp;nbsp;sequential_search&amp;nbsp; .-&gt; search_and_scrape;
 	parallel_search_and_scrape --&gt; process_context;
 	process_context --&gt; generate_report;
 	search_and_scrape -.-&gt; process_context;
-	generate_report --&gt; __end__;
+	evaluate_report --&gt; __end__;
 	search_and_scrape -. &amp;nbsp;continue_search&amp;nbsp; .-&gt; search_and_scrape;
 	classDef default fill:#f2f0ff,line-height:1.2
 	classDef first fill-opacity:0

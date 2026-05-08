@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -19,18 +18,6 @@ class EvaluationRubric(BaseModel):
     language: Literal["vi", "en", "mixed"] = "mixed"
     difficulty: Literal["easy", "medium", "hard"] = "medium"
     out_of_scope: bool = False
-
-
-class EvaluationSample(BaseModel):
-    model_config = ConfigDict(extra="allow")
-
-    id: str
-    query: str
-    expected_behavior: ExpectedBehavior = "answer"
-    ground_truth_answer: str | None = None
-    ground_truth_context: list[str] | None = None
-    source_urls: list[str] = Field(default_factory=list)
-    rubric: EvaluationRubric = Field(default_factory=EvaluationRubric)
 
 
 class RetrievedContext(BaseModel):
@@ -83,29 +70,6 @@ class EvaluationInput(BaseModel):
     relevance_scores: dict[str, float] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
-    @classmethod
-    def from_sample(
-        cls,
-        sample: EvaluationSample,
-        retrieved_contexts: list[RetrievedContext],
-        generated_output: GeneratedOutput,
-        *,
-        metadata: dict[str, Any] | None = None,
-    ) -> "EvaluationInput":
-        return cls(
-            sample_id=sample.id,
-            query=sample.query,
-            retrieved_contexts=retrieved_contexts,
-            generated_output=generated_output,
-            expected_behavior=sample.expected_behavior,
-            ground_truth_answer=sample.ground_truth_answer,
-            ground_truth_context=sample.ground_truth_context,
-            source_urls=sample.source_urls,
-            rubric=sample.rubric,
-            metadata=metadata or {},
-        )
-
-
 class MetricResult(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -132,16 +96,3 @@ class EvaluationResult(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-class EvaluationRunSummary(BaseModel):
-    model_config = ConfigDict(extra="allow")
-
-    run_id: str
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    sample_count: int
-    overall_score: float
-    label: Literal["pass", "warn", "fail"]
-    passed: bool
-    results: list[EvaluationResult] = Field(default_factory=list)
-    failed_samples: list[str] = Field(default_factory=list)
-    top_failure_modes: list[str] = Field(default_factory=list)
-    recommendations: list[str] = Field(default_factory=list)

@@ -11,16 +11,18 @@ graph TD;
 	search_and_scrape(search_and_scrape)
 	process_context(process_context)
 	generate_report(generate_report)
+	evaluate_report(evaluate_report)
 	__end__([<p>__end__</p>]):::last
 	__start__ --> choose_agent;
 	choose_agent -. &nbsp;generate_queries&nbsp; .-> generate_sub_queries;
 	choose_agent -. &nbsp;use_provided_urls&nbsp; .-> search_and_scrape;
+	generate_report --> evaluate_report;
 	generate_sub_queries -. &nbsp;parallel_search&nbsp; .-> parallel_search_and_scrape;
 	generate_sub_queries -. &nbsp;sequential_search&nbsp; .-> search_and_scrape;
 	parallel_search_and_scrape --> process_context;
 	process_context --> generate_report;
 	search_and_scrape -.-> process_context;
-	generate_report --> __end__;
+	evaluate_report --> __end__;
 	search_and_scrape -. &nbsp;continue_search&nbsp; .-> search_and_scrape;
 	classDef default fill:#f2f0ff,line-height:1.2
 	classDef first fill-opacity:0

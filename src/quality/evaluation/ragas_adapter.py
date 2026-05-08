@@ -4,17 +4,30 @@ import importlib
 import logging
 from typing import Any
 
-from src.quality.evaluation.schemas import EvaluationInput, MetricResult
+from .schemas import EvaluationInput, MetricResult
 
 logger = logging.getLogger(__name__)
 
+# RAGAS v0.2+ Triad metric names
+_TRIAD_METRICS = ["faithfulness", "answer_relevancy", "context_relevancy"]
+_RAGAS_PASS_THRESHOLD = 0.75
+_RAGAS_WARN_THRESHOLD = 0.55
+
+
+def _label(score: float) -> str:
+    if score >= _RAGAS_PASS_THRESHOLD:
+        return "pass"
+    if score >= _RAGAS_WARN_THRESHOLD:
+        return "warn"
+    return "fail"
+
 
 class RagasAdapter:
-    """Optional RAGAS bridge with graceful degradation.
+    """Optional RAGAS v0.2+ bridge focused on the RAG Triad.
 
-    RAGAS has changed public APIs across releases. This adapter treats it as an
-    opportunistic scorer: if the package or expected API is unavailable, callers
-    get an empty result and continue with ATLAS internal metrics.
+    Attempts to use the modern SingleTurnSample / evaluate API.
+    Falls back silently to internal metrics if RAGAS is absent or the API
+    has changed between releases.
     """
 
     def __init__(self) -> None:
@@ -23,62 +36,75 @@ class RagasAdapter:
     async def evaluate(self, input_data: EvaluationInput) -> dict[str, MetricResult]:
         if not self.available:
             return {}
-
         try:
-            ragas = importlib.import_module("ragas")
-            metrics_module = importlib.import_module("ragas.metrics")
-        except (ImportError, RuntimeError) as exc:
-            logger.info("RAGAS unavailable, using internal evaluation metrics: %s", exc)
+            return await self._run(input_data)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("RAGAS scoring failed, using internal metrics: %s", exc)
             return {}
 
+    async def _run(self, input_data: EvaluationInput) -> dict[str, MetricResult]:
+        # Try modern v0.2+ API first (SingleTurnSample + EvaluationDataset)
         try:
-            return await self._evaluate_with_best_effort(ragas, metrics_module, input_data)
-        except (AttributeError, TypeError, ValueError, RuntimeError, ImportError) as exc:
-            logger.warning("RAGAS scoring failed, using internal evaluation metrics: %s", exc)
-            return {}
-
-    async def _evaluate_with_best_effort(
-        self,
-        ragas: Any,
-        metrics_module: Any,
-        input_data: EvaluationInput,
-    ) -> dict[str, MetricResult]:
+            return await self._run_v2(input_data)
+        except (ImportError, AttributeError):
+            pass
+        # Fall back to legacy Dataset-based API
         try:
-            from datasets import Dataset  # type: ignore[import-not-found]
-        except ImportError:
+            return await self._run_legacy(input_data)
+        except (ImportError, AttributeError, TypeError) as exc:
+            logger.info("RAGAS legacy API also unavailable: %s", exc)
             return {}
 
-        metric_names = ["faithfulness", "response_relevancy", "context_precision", "context_recall"]
-        metrics = [getattr(metrics_module, name) for name in metric_names if hasattr(metrics_module, name)]
-        if not metrics or not hasattr(ragas, "evaluate"):
-            return {}
+    async def _run_v2(self, input_data: EvaluationInput) -> dict[str, MetricResult]:
+        from ragas import EvaluationDataset, SingleTurnSample, evaluate  # type: ignore[import-not-found]
+        from ragas.metrics import AnswerRelevancy, ContextRelevance, Faithfulness  # type: ignore[import-not-found]
 
-        dataset = Dataset.from_list(
-            [
-                {
-                    "question": input_data.query,
-                    "answer": input_data.generated_output.response,
-                    "contexts": [context.text for context in input_data.retrieved_contexts],
-                    "ground_truth": input_data.ground_truth_answer or "",
-                }
-            ]
+        sample = SingleTurnSample(
+            user_input=input_data.query,
+            response=input_data.generated_output.response,
+            retrieved_contexts=[ctx.text for ctx in input_data.retrieved_contexts],
+            reference=input_data.ground_truth_answer or "",
         )
-        raw_result = ragas.evaluate(dataset, metrics=metrics)
-        if hasattr(raw_result, "to_pandas"):
-            row = raw_result.to_pandas().iloc[0].to_dict()
-        elif isinstance(raw_result, dict):
-            row = raw_result
-        else:
-            return {}
+        dataset = EvaluationDataset(samples=[sample])
+        metrics = [Faithfulness(), AnswerRelevancy(), ContextRelevance()]
+        result = evaluate(dataset, metrics=metrics)
+        return _parse_result(result)
 
-        normalized: dict[str, MetricResult] = {}
-        for name, score in row.items():
-            if isinstance(score, int | float):
-                normalized[f"ragas_{name}"] = MetricResult(
-                    name=f"ragas_{name}",
-                    score=round(float(score), 4),
-                    label="pass" if float(score) >= 0.75 else "warn" if float(score) >= 0.6 else "fail",
-                    method="ragas",
-                    reason="Computed by optional RAGAS adapter.",
-                )
-        return normalized
+    async def _run_legacy(self, input_data: EvaluationInput) -> dict[str, MetricResult]:
+        from datasets import Dataset  # type: ignore[import-not-found]
+        from ragas import evaluate  # type: ignore[import-not-found]
+        from ragas.metrics import answer_relevancy, context_relevancy, faithfulness  # type: ignore[import-not-found]
+
+        dataset = Dataset.from_list([
+            {
+                "question": input_data.query,
+                "answer": input_data.generated_output.response,
+                "contexts": [ctx.text for ctx in input_data.retrieved_contexts],
+                "ground_truth": input_data.ground_truth_answer or "",
+            }
+        ])
+        result = evaluate(dataset, metrics=[faithfulness, answer_relevancy, context_relevancy])
+        return _parse_result(result)
+
+
+def _parse_result(raw_result: Any) -> dict[str, MetricResult]:
+    if hasattr(raw_result, "to_pandas"):
+        row: dict[str, Any] = raw_result.to_pandas().iloc[0].to_dict()
+    elif isinstance(raw_result, dict):
+        row = raw_result
+    else:
+        return {}
+
+    normalized: dict[str, MetricResult] = {}
+    for name, score in row.items():
+        if not isinstance(score, int | float):
+            continue
+        score_f = round(float(score), 4)
+        normalized[f"ragas_{name}"] = MetricResult(
+            name=f"ragas_{name}",
+            score=score_f,
+            label=_label(score_f),
+            method="ragas",
+            reason="Computed by RAGAS adapter (RAG Triad).",
+        )
+    return normalized

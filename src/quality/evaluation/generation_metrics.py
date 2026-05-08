@@ -66,31 +66,6 @@ async def answer_relevance_llm(
     )
 
 
-def answer_correctness_metric(
-    response: str,
-    ground_truth_answer: str | None,
-    *,
-    thresholds: EvaluationThresholds | None = None,
-) -> MetricResult:
-    thresholds = thresholds or EvaluationThresholds()
-    if not ground_truth_answer:
-        return MetricResult(
-            name="answer_correctness",
-            score=None,
-            label="skipped",
-            method="not_applicable",
-            reason="No ground_truth_answer was provided.",
-        )
-    score = lexical_similarity(response, ground_truth_answer)
-    return MetricResult(
-        name="answer_correctness",
-        score=score,
-        label=label_from_score(score, thresholds.min_answer_relevance),
-        method="embedding_proxy",
-        reason="Compared response with ground-truth answer using deterministic lexical similarity.",
-    )
-
-
 async def unsupported_claim_extraction(
     response: str,
     contexts: Sequence[RetrievedContext] | Sequence[str],
