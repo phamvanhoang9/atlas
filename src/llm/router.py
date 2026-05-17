@@ -28,19 +28,7 @@ def route_model(
 
     is_complex = report_type == "phân tích"
     
-    if provider == "openai":
-        if is_complex:
-            # Complex synthesis requires higher reasoning
-            if requested_model == "gpt-4o-mini":
-                logger.info("Routing from gpt-4o-mini to gpt-4o for complex analysis")
-                return "gpt-4o"
-        else:
-            # Simple tasks can be downgraded for speed/cost
-            if requested_model == "gpt-4o":
-                logger.info("Routing from gpt-4o to gpt-4o-mini for simple Q&A")
-                return "gpt-4o-mini"
-                
-    elif provider == "google":
+    if provider == "google":
         if is_complex:
             if "flash" in requested_model:
                 logger.info("Routing from flash to pro for complex analysis")

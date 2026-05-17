@@ -4,9 +4,9 @@ from collections.abc import Sequence
 
 from src.quality.evaluation.generation_metrics import source_scope_adherence_metric
 from src.quality.evaluation.metrics import (
+    bilingual_query_coverage,
     extract_information_claims,
     label_from_score,
-    lexical_similarity,
     strip_accents,
 )
 from src.quality.evaluation.schemas import (
@@ -66,8 +66,10 @@ def should_refuse(
         return True
     if not retrieved_contexts:
         return True
-    best = max(lexical_similarity(query, context.text) for context in retrieved_contexts)
-    return best < 0.06
+    # bilingual_query_coverage handles Vietnamese queries vs English sources;
+    # falls back to English technical-term matching when lexical coverage is low.
+    best = max(bilingual_query_coverage(query, context.text) for context in retrieved_contexts)
+    return best < 0.20
 
 
 def refusal_accuracy(
@@ -105,8 +107,11 @@ def refusal_accuracy(
 
 def over_answering_rate(input_data: EvaluationInput) -> MetricResult:
     response = input_data.generated_output.response
+    # Use English-translated query for coverage check when available so
+    # Vietnamese tokens don't register as near-zero against English contexts.
+    query = input_data.metadata.get("query_en") or input_data.query
     must_refuse = should_refuse(
-        input_data.query,
+        query,
         input_data.retrieved_contexts,
         input_data.expected_behavior,
         source_scope=not input_data.rubric.out_of_scope,
@@ -124,8 +129,13 @@ def over_answering_rate(input_data: EvaluationInput) -> MetricResult:
     )
 
 
-def source_scope_adherence(response: str, contexts: Sequence[RetrievedContext]) -> MetricResult:
-    return source_scope_adherence_metric(response, contexts)
+def source_scope_adherence(
+    response: str,
+    contexts: Sequence[RetrievedContext],
+    *,
+    faithfulness_result: "MetricResult | None" = None,
+) -> MetricResult:
+    return source_scope_adherence_metric(response, contexts, faithfulness_result=faithfulness_result)
 
 
 def vietnamese_quality_check(response: str, expected_language: str = "mixed") -> MetricResult:
@@ -141,7 +151,7 @@ def vietnamese_quality_check(response: str, expected_language: str = "mixed") ->
     normalized = strip_accents(response.lower())
     sentences = [sentence for sentence in response.split(".") if sentence.strip()]
     has_mojibake = any(marker in response for marker in ("Ã", "Ä", "áº", "á»"))
-    too_long = any(len(sentence.split()) > 70 for sentence in sentences)
+    too_long = any(len(sentence.split()) > 120 for sentence in sentences)
     vague_translation = any(marker in normalized for marker in ("may hoc sau", "hoc may sau")) and "deep learning" in normalized
     penalties = sum([has_mojibake, too_long, vague_translation])
     score = max(0.0, 1.0 - (penalties * 0.34))

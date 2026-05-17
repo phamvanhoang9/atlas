@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import tempfile
 import warnings
 from concurrent.futures.thread import ThreadPoolExecutor
@@ -68,9 +69,7 @@ class Scraper:
             if link.endswith(".pdf"):
                 content = self.scrape_pdf_with_pymupdf(link)
             elif "arxiv.org" in link:
-                doc_num = link.split("/")[-1].replace("v1", "").replace("v2", "").replace("v3", "").replace("v4", "")
-                pdf_url = f"https://arxiv.org/pdf/{doc_num}.pdf"
-                content = self.scrape_pdf_with_pymupdf(pdf_url)
+                content = self._scrape_arxiv(link)
             elif link:
                 content = self.scrape_text_with_bs(link, session)
 
@@ -94,6 +93,20 @@ class Scraper:
         lines = (line.strip() for line in raw_content.splitlines())
         chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
         return "\n".join(chunk for chunk in chunks if chunk)
+
+    def _scrape_arxiv(self, link: str) -> str:
+        """Scrape arxiv paper: try PDF first, fall back to abstract HTML page."""
+        match = re.search(r"(\d{4}\.\d{4,5}(?:v\d+)?)", link)
+        if not match:
+            return self.scrape_text_with_bs(link, self.session)
+        arxiv_id = re.sub(r"v\d+$", "", match.group(1))
+        pdf_url = f"https://arxiv.org/pdf/{arxiv_id}"
+        content = self.scrape_pdf_with_pymupdf(pdf_url)
+        if len(content) >= 500:
+            return content
+        abs_url = f"https://arxiv.org/abs/{arxiv_id}"
+        logger.info("arxiv PDF thin/failed (%s chars), falling back to abs page %s", len(content), abs_url)
+        return self.scrape_text_with_bs(abs_url, self.session)
 
     def scrape_pdf_with_pymupdf(self, url: str) -> str:
         """

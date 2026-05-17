@@ -24,7 +24,6 @@ class AcademicFilter:
         "proceedings.neurips.cc",
         "proceedings.mlr.press",
         "openaccess.thecvf.com",
-        "huggingface.co",
     ]
 
     TIER_2_DOMAINS = [
@@ -48,6 +47,16 @@ class AcademicFilter:
         "researchgate.net",
         "dblp.org",
         "paperswithcode.com",
+        "huggingface.co",
+    ]
+
+    # URL path prefixes that identify non-academic content even on known domains.
+    BLACKLIST_URL_PATHS = [
+        "huggingface.co/learn/",
+        "huggingface.co/datasets/",
+        "openai.com/index/",
+        "openai.com/vi-vn/",
+        "openai.com/blog/",
     ]
 
     TIER_4_DOMAINS = [
@@ -136,6 +145,7 @@ class AcademicFilter:
         self.tier_3_domains = self.TIER_3_DOMAINS
         self.tier_4_domains = self.TIER_4_DOMAINS
         self.blacklist = self.BLACKLIST_DOMAINS
+        self.blacklist_url_paths = self.BLACKLIST_URL_PATHS
         self.top_conferences = self.TOP_CONFERENCES
 
     def is_academic_source(self, url: str) -> bool:
@@ -143,7 +153,12 @@ class AcademicFilter:
         if not url:
             return False
 
-        domain = urlparse(url.lower()).netloc
+        url_lower = url.lower()
+        domain = urlparse(url_lower).netloc
+
+        for path_prefix in self.blacklist_url_paths:
+            if path_prefix in url_lower:
+                return False
 
         for blacklisted in self.blacklist:
             if blacklisted in domain:

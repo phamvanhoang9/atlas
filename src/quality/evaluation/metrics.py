@@ -156,6 +156,53 @@ def max_similarity(text: str, candidates: Sequence[str]) -> float:
     return max(lexical_similarity(text, candidate) for candidate in candidates)
 
 
+def query_coverage(query: str, context: str) -> float:
+    """Fraction of query tokens that appear in the context (query-side recall).
+
+    Unlike lexical_similarity (F1), this is not penalised by a long context,
+    making it suitable for checking whether a document is on-topic for a query.
+    """
+    query_tokens = set(tokenize(query))
+    if not query_tokens:
+        return 0.0
+    context_tokens = set(tokenize(context))
+    return len(query_tokens & context_tokens) / len(query_tokens)
+
+
+_ENG_STOPWORDS = frozenset({
+    "the", "and", "for", "are", "but", "not", "you", "all", "can",
+    "has", "had", "him", "his", "how", "its", "may", "our", "out",
+    "was", "who", "will", "with", "that", "this", "from", "they",
+    "have", "been", "were", "more", "also", "than", "when", "used",
+    "uses", "which", "their", "these", "those", "would", "could", "should",
+})
+
+
+def bilingual_query_coverage(query: str, context: str, threshold: float = 0.20) -> float:
+    """query_coverage with an English-term fallback for Vietnamese queries.
+
+    Vietnamese queries against English sources get near-zero query_coverage
+    because query tokens are in Vietnamese.  When coverage is below
+    `threshold`, extract English terms (≥ 3 chars) from the query and check
+    if any appear as substrings in the context; ≥ 50 % match → relevant.
+    Using 3-char minimum catches short acronyms like "LLM".
+    """
+    score = query_coverage(query, context)
+    if score >= threshold:
+        return score
+    eng_terms = [
+        t.lower() for t in re.findall(r"[a-zA-Z]{3,}", query)
+        if t.lower() not in _ENG_STOPWORDS
+    ]
+    if not eng_terms:
+        return score
+    context_lower = context.lower()
+    matched = sum(1 for t in eng_terms if t in context_lower)
+    if matched / len(eng_terms) >= 0.5:
+        return threshold  # treat as just-relevant
+    return score
+
+
 def split_sentences(text: str) -> list[str]:
     normalized = re.sub(r"\s+", " ", text.strip())
     if not normalized:

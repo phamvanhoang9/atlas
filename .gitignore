@@ -114,3 +114,9 @@ learning/
 node_modules/
 npm-debug.log
 yarn-error.log
+
+AGENTS.md
+CLAUDE.md
+.claude/
+.codex/
+docs/agent-memory/

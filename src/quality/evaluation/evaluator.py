@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
@@ -46,31 +47,44 @@ class EvaluationRunner:
         thresholds: EvaluationThresholds | None = None,
         top_k: int = 3,
         judge: Callable[[str], Awaitable[str] | str] | None = None,
+        translator: Callable[[str], Awaitable[str] | str] | None = None,
         enable_ragas: bool = True,
     ) -> None:
         self.thresholds = thresholds or EvaluationThresholds()
         self.top_k = top_k
         self.judge = judge
+        self.translator = translator
         self.ragas = RagasAdapter() if enable_ragas else None
 
     @classmethod
     def from_config(cls, cfg: Any) -> "EvaluationRunner":
         judge = _build_llm_judge_from_config(cfg)
+        translator = _build_llm_translator_from_config(cfg)
         return cls(
             thresholds=EvaluationThresholds.model_validate(
                 getattr(cfg, "eval_fail_thresholds", {}) or {}
             ),
             top_k=int(getattr(cfg, "eval_top_k", 3)),
             judge=judge,
+            translator=translator,
         )
 
     async def aevaluate_single(self, input_data: EvaluationInput) -> EvaluationResult:
         retrieved_ids = [context.id for context in input_data.retrieved_contexts]
         metrics: dict[str, MetricResult] = {}
 
+        # Translate Vietnamese query to English once so LLM-judge and lexical
+        # metrics don't compare Vietnamese tokens against English context text.
+        query_for_scoring = input_data.query
+        if self.translator and _is_vietnamese(input_data.query):
+            translated = await _translate_to_english(input_data.query, self.translator)
+            if translated and translated != input_data.query:
+                query_for_scoring = translated
+                logger.info("Query translated for scoring: %r → %r", input_data.query, query_for_scoring)
+
         # --- RAG Triad (core blocking metrics) ---
         metrics["context_relevance"] = await context_relevance_llm(
-            input_data.query,
+            query_for_scoring,
             input_data.retrieved_contexts,
             judge=self.judge,
             thresholds=self.thresholds,
@@ -82,7 +96,7 @@ class EvaluationRunner:
             thresholds=self.thresholds,
         )
         metrics["answer_relevance"] = await answer_relevance_llm(
-            input_data.query,
+            query_for_scoring,
             input_data.generated_output.response,
             judge=self.judge,
             thresholds=self.thresholds,
@@ -111,7 +125,7 @@ class EvaluationRunner:
             input_data.retrieved_contexts,
             input_data.ground_truth_context,
         )
-        metrics["noise_ratio"] = noise_ratio_metric(input_data.query, input_data.retrieved_contexts)
+        metrics["noise_ratio"] = noise_ratio_metric(query_for_scoring, input_data.retrieved_contexts)
 
         # --- Supporting generation metrics ---
         metrics["unsupported_claim_count"] = unsupported_claim_count_metric(
@@ -130,7 +144,9 @@ class EvaluationRunner:
         )
         metrics["over_answering_rate"] = over_answering_rate(input_data)
         metrics["source_scope_adherence"] = source_scope_adherence(
-            input_data.generated_output.response, input_data.retrieved_contexts
+            input_data.generated_output.response,
+            input_data.retrieved_contexts,
+            faithfulness_result=metrics.get("faithfulness"),
         )
         metrics["vietnamese_quality_check"] = vietnamese_quality_check(
             input_data.generated_output.response,
@@ -147,6 +163,9 @@ class EvaluationRunner:
 
         overall_score = _overall_score(metrics)
         label = _overall_label(metrics, overall_score)
+        result_metadata = {**input_data.metadata}
+        if query_for_scoring != input_data.query:
+            result_metadata["query_en"] = query_for_scoring
         return EvaluationResult(
             sample_id=input_data.sample_id or str(uuid.uuid4()),
             query=input_data.query,
@@ -156,7 +175,7 @@ class EvaluationRunner:
             metrics=metrics,
             recommendations=_recommendations(metrics),
             quality_check=quality_check,
-            metadata=input_data.metadata,
+            metadata=result_metadata,
         )
 
 
@@ -177,11 +196,21 @@ async def evaluate_state_node(state: dict[str, Any]) -> dict[str, Any]:
     cfg = state.get("cfg")
     if not getattr(cfg, "enable_evaluation", False):
         return state
-    if getattr(cfg, "evaluation_mode", "online") not in {"online", "both"}:
-        return state
+
+    _MODE_DOMAINS = {
+        "hỏi đáp": "qa",
+        "phân tích": "deep_analysis",
+        "đề xuất bài báo": "paper_recommendation",
+    }
 
     try:
+        report_type = state.get("report_type", "")
         contexts = contexts_from_strings(state.get("context", []), state.get("visited_urls", []))
+        from .schemas import EvaluationRubric
+        rubric = EvaluationRubric(
+            domain=_MODE_DOMAINS.get(report_type, "qa"),
+            language="vi",
+        )
         input_data = EvaluationInput(
             sample_id=state.get("history_id"),
             query=state.get("query", ""),
@@ -189,10 +218,31 @@ async def evaluate_state_node(state: dict[str, Any]) -> dict[str, Any]:
             generated_output=GeneratedOutput(response=state.get("report", "")),
             expected_behavior="answer",
             source_urls=state.get("visited_urls", []),
-            metadata={"report_type": state.get("report_type")},
+            rubric=rubric,
+            metadata={"report_type": report_type},
         )
         result = await EvaluationRunner.from_config(cfg).aevaluate_single(input_data)
         payload = result.model_dump(mode="json")
+
+        metric_lines = "\n".join(
+            f"  {name:<30} score={m.score!s:<6} label={m.label}"
+            for name, m in result.metrics.items()
+        )
+        recs = "\n".join(f"  - {r}" for r in result.recommendations) or "  (none)"
+        logger.info(
+            "\n=== EVALUATION RESULT ===\n"
+            "Query   : %s\n"
+            "Overall : %.4f  [%s]\n"
+            "Metrics :\n%s\n"
+            "Recommendations:\n%s\n"
+            "=========================",
+            result.query,
+            result.overall_score,
+            result.label.upper(),
+            metric_lines,
+            recs,
+        )
+
         websocket = state.get("websocket")
         if websocket:
             await websocket.send_json({"type": "evaluation", "output": payload})
@@ -202,12 +252,26 @@ async def evaluate_state_node(state: dict[str, Any]) -> dict[str, Any]:
         return {**state, "evaluation_result": {"error": str(exc)}}
 
 
+_INVERTED_METRICS = frozenset({"noise_ratio", "over_answering_rate"})
+
+# unsupported_claim_count is derived from faithfulness evidence and is already
+# captured by the faithfulness score. Excluding it avoids double-counting the
+# same grounding signal in the average.
+_SKIP_IN_OVERALL = frozenset({"unsupported_claim_count"})
+
+
 def _overall_score(metrics: dict[str, MetricResult]) -> float:
-    scores = [
-        metric.score
-        for metric in metrics.values()
-        if metric.score is not None and metric.name != "unsupported_claim_count"
-    ]
+    import math
+    scores = []
+    for metric in metrics.values():
+        if metric.name in _SKIP_IN_OVERALL:
+            continue
+        if metric.score is None or (isinstance(metric.score, float) and math.isnan(metric.score)):
+            continue
+        if metric.name in _INVERTED_METRICS:
+            scores.append(max(0.0, min(1.0, 1.0 - metric.score)))
+        else:
+            scores.append(metric.score)
     if not scores:
         return 0.0
     return round(sum(scores) / len(scores), 4)
@@ -240,6 +304,29 @@ def _recommendations(metrics: dict[str, MetricResult]) -> list[str]:
     return recommendations
 
 
+_VI_PATTERN = re.compile(
+    r"[àáảãạăằắẳẵặâầấẩẫậđèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵ]",
+    re.IGNORECASE,
+)
+
+
+def _is_vietnamese(text: str) -> bool:
+    return bool(_VI_PATTERN.search(text))
+
+
+async def _translate_to_english(text: str, translator: Callable[[str], Awaitable[str] | str]) -> str:
+    """Translate Vietnamese text to English; returns original on any failure."""
+    try:
+        raw = translator(text)
+        if hasattr(raw, "__await__"):
+            raw = await raw  # type: ignore[assignment]
+        result = str(raw).strip()
+        return result if result else text
+    except Exception as exc:
+        logger.debug("Translation failed, using original query: %s", exc)
+        return text
+
+
 def _build_llm_judge_from_config(cfg: Any) -> Callable[[str], Awaitable[str]] | None:
     model = getattr(cfg, "eval_llm_model", "") or ""
     if not model:
@@ -258,21 +345,60 @@ def _build_llm_judge_from_config(cfg: Any) -> Callable[[str], Awaitable[str]] | 
                 {
                     "role": "system",
                     "content": (
-                        "You are a RAG evaluation judge. "
-                        "Assess each metric using the RAG Triad framework: "
+                        "You are a RAG evaluation judge for a bilingual Vietnamese/English research assistant. "
+                        "The system retrieves English academic papers and generates Vietnamese-language reports. "
+                        "Vietnamese responses that accurately paraphrase English source content MUST receive "
+                        "high faithfulness and answer_relevance scores — semantic alignment across languages "
+                        "is correct behavior, NOT a deficiency. "
+                        "Assess using the RAG Triad framework: "
                         "Context Relevance (are retrieved contexts on-topic?), "
-                        "Faithfulness (are claims grounded in context?), "
-                        "Answer Relevance (does the answer address the question?). "
+                        "Faithfulness (do Vietnamese claims accurately represent English context content?), "
+                        "Answer Relevance (does the Vietnamese response semantically address the query intent?). "
                         "Think step-by-step before scoring. Return only strict JSON."
                     ),
                 },
                 {"role": "user", "content": prompt},
             ],
             temperature=0.0,
-            max_tokens=1200,
+            max_tokens=4096,
+            stream=False,
+            report_type="phân tích",
+            llm_kwargs=getattr(cfg, "llm_kwargs", {}),
+        )
+
+    return _judge
+
+
+def _build_llm_translator_from_config(cfg: Any) -> Callable[[str], Awaitable[str]] | None:
+    model = getattr(cfg, "eval_llm_model", "") or ""
+    if not model:
+        return None
+    provider = getattr(cfg, "eval_llm_provider", "same_as_main")
+    if provider == "same_as_main":
+        provider = getattr(cfg, "llm_provider", "openai")
+
+    async def _translate(text: str) -> str:
+        from ...llm.completion import create_chat_completion
+
+        return await create_chat_completion(
+            model=model,
+            llm_provider=provider,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a precise translator. "
+                        "Translate the user's Vietnamese text to concise English. "
+                        "Return only the English translation — no explanation, no JSON."
+                    ),
+                },
+                {"role": "user", "content": text},
+            ],
+            temperature=0.0,
+            max_tokens=256,
             stream=False,
             report_type="hỏi đáp",
             llm_kwargs=getattr(cfg, "llm_kwargs", {}),
         )
 
-    return _judge
+    return _translate

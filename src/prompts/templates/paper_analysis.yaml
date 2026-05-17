@@ -26,6 +26,6 @@ template: |
   - Use only the provided paper context.
   - Explain the problem, method, architecture, training or evaluation setup, results, limitations, and implementation guidance.
   - Include a "Rui ro khi trien khai" section covering cost, reliability, data quality, latency, and monitoring.
-  - Cite sources as Markdown links using source titles when available, for example: [Tên nguồn](https://example.com). Do not paste bare URLs in body paragraphs.
-  - In "## Nguồn tham khảo", list source links with one-line relevance notes.
+  - Each source in the context has a sequential number in its header (e.g. "### Nguồn 1:" or "Source:" with "Title:"). Use [N] inline citations; do not paste bare URLs in body paragraphs.
+  - In "## Nguồn tham khảo", list "- [N] [Tên nguồn](URL): one-line relevance note" using ONLY the exact titles and URLs from the context headers — NEVER invent or paraphrase source titles. Each URL must appear EXACTLY ONCE.
   - Mark missing details clearly instead of guessing.

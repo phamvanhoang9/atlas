@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import logging
+import math
 from typing import Any
 
 from .schemas import EvaluationInput, MetricResult
@@ -33,9 +34,21 @@ class RagasAdapter:
     def __init__(self) -> None:
         self.available = importlib.util.find_spec("ragas") is not None
 
+    _MIN_CONTEXTS = 2  # RAGAS ContextRelevance requires ≥2 contexts to avoid NaN
+
     async def evaluate(self, input_data: EvaluationInput) -> dict[str, MetricResult]:
         if not self.available:
             return {}
+        if len(input_data.retrieved_contexts) < self._MIN_CONTEXTS:
+            reason = (
+                f"Skipped: only {len(input_data.retrieved_contexts)} context(s) retrieved "
+                f"— need ≥{self._MIN_CONTEXTS} for stable RAGAS metrics."
+            )
+            logger.info("RAGAS skipped: %s", reason)
+            return {
+                f"ragas_{m}": MetricResult(name=f"ragas_{m}", score=None, label="skipped", method="ragas", reason=reason)
+                for m in ("faithfulness", "answer_relevancy", "nv_context_relevance")
+            }
         try:
             return await self._run(input_data)
         except Exception as exc:  # noqa: BLE001
@@ -56,18 +69,47 @@ class RagasAdapter:
             return {}
 
     async def _run_v2(self, input_data: EvaluationInput) -> dict[str, MetricResult]:
-        from ragas import EvaluationDataset, SingleTurnSample, evaluate  # type: ignore[import-not-found]
-        from ragas.metrics import AnswerRelevancy, ContextRelevance, Faithfulness  # type: ignore[import-not-found]
+        import asyncio
+        import os
+        from functools import partial
 
+        from langchain_openai import ChatOpenAI, OpenAIEmbeddings  # type: ignore[import-not-found]
+        from ragas import EvaluationDataset, SingleTurnSample, evaluate  # type: ignore[import-not-found]
+        from ragas.embeddings import LangchainEmbeddingsWrapper  # type: ignore[import-not-found]
+        from ragas.llms import LangchainLLMWrapper  # type: ignore[import-not-found]
+        from ragas.metrics import AnswerRelevancy, ContextRelevance, Faithfulness  # type: ignore[import-not-found]
+        from ragas.run_config import RunConfig  # type: ignore[import-not-found]
+
+        # Explicitly wrap langchain objects so RAGAS doesn't call removed methods
+        # (embed_query / agenerate_text) that were dropped in langchain-openai ≥1.0.
+        llm = LangchainLLMWrapper(ChatOpenAI(model=os.getenv("OPENAI_MODEL", "gpt-4o-mini")))
+        embeddings = LangchainEmbeddingsWrapper(OpenAIEmbeddings())
+
+        # Use English translation when available so RAGAS metrics (which use an
+        # English LLM internally) score query↔context relevance correctly.
+        query_for_ragas = input_data.metadata.get("query_en") or input_data.query
         sample = SingleTurnSample(
-            user_input=input_data.query,
+            user_input=query_for_ragas,
             response=input_data.generated_output.response,
             retrieved_contexts=[ctx.text for ctx in input_data.retrieved_contexts],
             reference=input_data.ground_truth_answer or "",
         )
         dataset = EvaluationDataset(samples=[sample])
         metrics = [Faithfulness(), AnswerRelevancy(), ContextRelevance()]
-        result = evaluate(dataset, metrics=metrics)
+        # ragas.evaluate() is synchronous and calls asyncio.run() internally.
+        # Running it in a thread gives it an isolated event loop so it doesn't
+        # conflict with the outer loop (which nest_asyncio has already patched).
+        # RunConfig caps retries/timeout so a rate-limit doesn't cause an infinite hang.
+        run_config = RunConfig(timeout=60, max_retries=2, max_wait=30)
+        fn = partial(
+            evaluate,
+            dataset,
+            metrics=metrics,
+            llm=llm,
+            embeddings=embeddings,
+            run_config=run_config,
+        )
+        result = await asyncio.to_thread(fn)
         return _parse_result(result)
 
     async def _run_legacy(self, input_data: EvaluationInput) -> dict[str, MetricResult]:
@@ -75,9 +117,10 @@ class RagasAdapter:
         from ragas import evaluate  # type: ignore[import-not-found]
         from ragas.metrics import answer_relevancy, context_relevancy, faithfulness  # type: ignore[import-not-found]
 
+        query_for_ragas = input_data.metadata.get("query_en") or input_data.query
         dataset = Dataset.from_list([
             {
-                "question": input_data.query,
+                "question": query_for_ragas,
                 "answer": input_data.generated_output.response,
                 "contexts": [ctx.text for ctx in input_data.retrieved_contexts],
                 "ground_truth": input_data.ground_truth_answer or "",
@@ -98,6 +141,15 @@ def _parse_result(raw_result: Any) -> dict[str, MetricResult]:
     normalized: dict[str, MetricResult] = {}
     for name, score in row.items():
         if not isinstance(score, int | float):
+            continue
+        if isinstance(score, float) and math.isnan(score):
+            normalized[f"ragas_{name}"] = MetricResult(
+                name=f"ragas_{name}",
+                score=None,
+                label="skipped",
+                method="ragas",
+                reason="RAGAS returned NaN (LLM or embeddings error).",
+            )
             continue
         score_f = round(float(score), 4)
         normalized[f"ragas_{name}"] = MetricResult(

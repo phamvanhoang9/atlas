@@ -3,17 +3,19 @@
     "llm_provider": "openai",
     "llm_model": "gpt-4o-mini",
     "embedding_provider": "openai",
-    "token_limit": 8000,
-    "browse_chunk_max_length": 8192,
-    "summary_token_limit": 1000,
-    "temperature": 0.2,
-    "max_search_results_per_query": 8,
-    "total_words": 2000,
-    "report_format": "APA",
-    "enable_parallel_search": true,
-    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-    "memory_backend": "local",
+
     "similarity_threshold": 0.55,
     "chunk_size": 500,
-    "chunk_overlap": 100
+    "chunk_overlap": 100,
+
+    "report_format": "APA",
+    "memory_backend": "local",
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0",
+
+    "enable_evaluation": false,
+    "eval_llm_provider": "openai",
+    "eval_llm_model": "gpt-4o",
+    "eval_embedding_model": "",
+    "eval_top_k": 3,
+    "eval_fail_thresholds": {}
 }

@@ -15,6 +15,42 @@ from src.transport.streaming import stream_output
 logger = logging.getLogger(__name__)
 
 
+_QA_INCLUDE_DOMAINS = [
+    "huggingface.co",
+    "openai.com",
+    "anthropic.com",
+    "deepmind.google",
+    "research.google",
+    "ai.meta.com",
+    "ai.googleblog.com",
+    "blog.research.google",
+    "lilianweng.github.io",
+    "arxiv.org",
+    "openreview.net",
+]
+
+_PAPER_REC_INCLUDE_DOMAINS = [
+    "arxiv.org",
+    "semanticscholar.org",
+    "paperswithcode.com",
+    "openreview.net",
+    "proceedings.neurips.cc",
+    "proceedings.mlr.press",
+    "aclanthology.org",
+    "openaccess.thecvf.com",
+    "aaai.org",
+    "scholar.google.com",
+]
+
+
+def _include_domains_for_mode(report_type: str) -> list[str] | None:
+    if report_type == "hỏi đáp":
+        return _QA_INCLUDE_DOMAINS
+    if report_type == "đề xuất bài báo":
+        return _PAPER_REC_INCLUDE_DOMAINS
+    return None  # phân tích uses TavilySearch defaults (broad academic)
+
+
 def _get_retriever(name: str) -> Any:
     from src.retrievers import TavilySearch
     if name == "tavily":
@@ -40,14 +76,14 @@ def _max_urls_for_mode(report_type: str) -> int:
     return 8
 
 
-async def _parallel_search(queries, retriever_name, max_results=7, ws=None):
+async def _parallel_search(queries, retriever_name, max_results=7, ws=None, include_domains=None):
     logger.info("Parallel search start queries=%s retriever=%s max_results=%s", len(queries), retriever_name, max_results)
 
     async def _one(q):
         try:
             await stream_output("logs", f"Đang tìm kiếm song song: '{q}'...", ws)
             loop = asyncio.get_running_loop()
-            r = _get_retriever(retriever_name)(q)
+            r = _get_retriever(retriever_name)(q, include_domains=include_domains)
             res = await loop.run_in_executor(None, r.search, max_results)
             logger.info("Search query complete query=%r results=%s", q, len(res))
             await stream_output("logs", f"Tìm thấy {len(res)} kết quả cho '{q}'", ws)
@@ -96,7 +132,10 @@ async def parallel_search_and_scrape_node(state: ResearchState) -> dict[str, Any
     await stream_output("logs", f"\n🚀 Tìm kiếm song song {len(sub_queries)} queries...\n", ws)
 
     try:
-        srd = await _parallel_search(sub_queries, cfg.retriever, cfg.max_search_results_per_query, ws)
+        srd = await _parallel_search(
+            sub_queries, cfg.retriever, cfg.max_search_results_per_query, ws,
+            include_domains=_include_domains_for_mode(state["report_type"]),
+        )
     except (RuntimeError, OSError, ValueError, TypeError, KeyError) as exc:
         logger.warning("parallel search: %s", exc)
         return state
@@ -195,7 +234,10 @@ async def search_and_scrape_node(state: ResearchState) -> dict[str, Any]:
     elif idx < len(state.get("sub_queries", [])):
         sub_query = state["sub_queries"][idx]
         await stream_output("logs", f"\n🔎 Đang tìm kiếm '{sub_query}'...", ws)
-        r = _get_retriever(cfg.retriever)(sub_query)
+        r = _get_retriever(cfg.retriever)(
+            sub_query,
+            include_domains=_include_domains_for_mode(state["report_type"]),
+        )
         loop = asyncio.get_running_loop()
         sr = await loop.run_in_executor(None, r.search, cfg.max_search_results_per_query)
         urls_to_scrape = [u.get("href") for u in sr]

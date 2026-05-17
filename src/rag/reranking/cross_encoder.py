@@ -10,6 +10,10 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_CROSS_ENCODER_MODEL = "cross-encoder/ms-marco-MiniLM-L-12-v2"
 
+# Silence the expected "No modules.json" INFO from sentence_transformers when loading
+# a CrossEncoder model that has no SentenceTransformer wrapper files.
+logging.getLogger("sentence_transformers.base.model").setLevel(logging.WARNING)
+
 
 def _env_flag(name: str, default: bool) -> bool:
     raw = os.getenv(name)
@@ -18,10 +22,23 @@ def _env_flag(name: str, default: bool) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _resolve_device() -> str:
+    """Return CROSS_ENCODER_DEVICE env var, or auto-detect cuda/cpu."""
+    explicit = os.getenv("CROSS_ENCODER_DEVICE")
+    if explicit:
+        return explicit.strip()
+    try:
+        import torch
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    except ImportError:
+        return "cpu"
+
+
 @dataclass
 class CrossEncoderReranker:
     model_name: str = DEFAULT_CROSS_ENCODER_MODEL
     enabled: bool = False
+    device: str = field(default_factory=_resolve_device)
     _model: Any = field(default=None, init=False, repr=False)
     _load_failed: bool = field(default=False, init=False, repr=False)
 
@@ -30,6 +47,7 @@ class CrossEncoderReranker:
         return cls(
             model_name=os.getenv("CROSS_ENCODER_MODEL", DEFAULT_CROSS_ENCODER_MODEL),
             enabled=_env_flag("ENABLE_CROSS_ENCODER_RERANKING", False),
+            device=_resolve_device(),
         )
 
     def _load_model(self) -> Any | None:
@@ -48,8 +66,8 @@ class CrossEncoderReranker:
             return None
 
         try:
-            self._model = CrossEncoder(self.model_name)
-            logger.info("Loaded cross-encoder reranker: %s", self.model_name)
+            self._model = CrossEncoder(self.model_name, device=self.device)
+            logger.info("Loaded cross-encoder reranker: %s (device=%s)", self.model_name, self.device)
             return self._model
         except (RuntimeError, OSError, ValueError) as exc:
             self._load_failed = True

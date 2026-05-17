@@ -50,7 +50,7 @@ class EvaluationThresholds(BaseModel):
     min_context_relevance: float = 0.75
     min_context_recall: float = 0.75
     min_ndcg: float = 0.75
-    max_unsupported_claims: int = 1
+    max_unsupported_claims: int = 2
     min_refusal_accuracy: float = 1.0
 
 

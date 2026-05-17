@@ -45,13 +45,16 @@ def test_get_context_limits_documents_without_duplicates(mock_get_retriever, moc
     ]
     captured_documents = []
 
-    def make_retriever(limited_docs):
+    def make_retriever(limited_docs, **kwargs):
         captured_documents.extend(limited_docs)
         mock_doc = MagicMock()
         mock_doc.page_content = "Relevant chunk"
         mock_doc.metadata = {"source": "url1", "title": "Title1"}
+        mock_doc2 = MagicMock()
+        mock_doc2.page_content = "Relevant chunk 2"
+        mock_doc2.metadata = {"source": "url2", "title": "Title2"}
         mock_retriever = MagicMock()
-        mock_retriever.invoke.return_value = [mock_doc]
+        mock_retriever.invoke.return_value = [mock_doc, mock_doc2]
         return mock_retriever
 
     mock_get_retriever.side_effect = make_retriever

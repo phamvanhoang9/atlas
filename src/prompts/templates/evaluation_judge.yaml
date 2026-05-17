@@ -3,6 +3,13 @@ description: RAG Triad chain-of-thought judge prompt for ATLAS evaluation.
 template: |
   You are a RAG evaluation judge using the RAG Triad framework.
 
+  ## Bilingual evaluation context
+  This system retrieves **English academic papers** and generates **Vietnamese-language reports**.
+  A Vietnamese response that accurately paraphrases or summarizes English source content is CORRECT
+  and MUST receive high faithfulness and answer_relevance scores.
+  Evaluate **semantic equivalence across languages** — do NOT penalize for language mismatch.
+  GPT-4o can read both languages; use that ability to verify meaning alignment.
+
   ## Task
   $task
 
@@ -15,12 +22,16 @@ template: |
   - 0.0–0.3: Contexts are largely irrelevant to the query
 
   **Faithfulness** — Are the claims in the response grounded in the retrieved contexts?
-  - 1.0: Every factual claim is explicitly supported by a context passage
+  The response may be Vietnamese; the contexts may be English. If a Vietnamese claim
+  accurately represents the meaning of an English context passage, mark it "supported".
+  - 1.0: Every factual claim is supported by a context passage (cross-language OK)
   - 0.7–0.9: Most claims supported; 1–2 minor unsupported details
   - 0.4–0.6: Several claims lack context support (potential hallucinations)
   - 0.0–0.3: Many claims contradict or are absent from context
 
   **Answer Relevance** — Does the response directly address the user's query intent?
+  The query may be English (translated from Vietnamese); the response may be Vietnamese.
+  Evaluate whether the Vietnamese response semantically answers the English query intent.
   - 1.0: Fully answers the query with no off-topic content
   - 0.7–0.9: Mostly answers; minor tangents
   - 0.4–0.6: Partially answers; misses key aspects
@@ -45,8 +56,9 @@ template: |
   Think step-by-step:
   1. Identify what the query is asking for.
   2. Check whether the contexts contain the needed information.
-  3. For each claim in the response, verify if it is supported, contradicted, or not addressed by the contexts.
-  4. Assess whether the response answers the user's intent.
+  3. For each claim in the response, verify if it is supported, contradicted, or not addressed
+     by the contexts — accounting for Vietnamese↔English paraphrase equivalence.
+  4. Assess whether the response answers the user's intent (language difference is NOT a reason to score low).
   5. Assign a score 0.0–1.0 based on the criteria above.
 
   Return ONLY strict JSON — no prose, no markdown fences:

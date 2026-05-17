@@ -27,9 +27,11 @@ template: |
   - Focus tightly on the requested topic.
   - Synthesize the evidence into architecture patterns, research trends, implementation trade-offs, cost controls, evaluation methods, and production risks.
   - Prioritize techniques likely to remain useful for the next 1 to 2 years: agentic workflows, retrieval evaluation, reranking, structured outputs, observability, and fallback design.
-  - Cite sources as Markdown links using source titles when available, for example: [Tên nguồn](https://example.com). Do not paste bare URLs in body paragraphs.
-  - In "## Nguồn tham khảo", list every cited source as "- [Tên nguồn](URL): why it matters".
+  - Each source in the context has a sequential number in its header (e.g. "### Nguồn 1:" or "Source:" with "Title:"). Use those numbers as citation markers: place [N] at the END of EVERY sentence that states a fact, statistic, mechanism, finding, or claim — for example: "Kỹ thuật X cải thiện recall 18% [1]." This is mandatory: a sentence without [N] will be treated as uncited.
+  - Do not paste bare URLs in body paragraphs; use [N] inline only.
+  - In "## Nguồn tham khảo", list every cited source as "- [N] [Tên nguồn](URL): why it matters" using ONLY the exact titles and URLs from the context headers — NEVER invent or paraphrase source titles. Each URL must appear EXACTLY ONCE.
   - Include at least one compact Markdown table when comparing methods or trade-offs.
   - Make the analysis actionable for an AI engineering buyer: architecture decisions, implementation steps, monitoring, cost, reliability, and go/no-go recommendations.
   - If evidence is thin, explicitly mark it as "Suy luận từ ngữ cảnh" instead of overstating.
   - Separate facts from inference when the context is incomplete.
+  - Keep individual sentences under 80 words; split compound ideas into separate sentences.

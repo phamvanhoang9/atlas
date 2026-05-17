@@ -1,12 +1,12 @@
 name: paper_recommendation
-version: "1"
+version: "2"
 template: |
-  Create a Vietnamese reading list for AI engineers and researchers.
+  You are curating an AI research reading list for a Vietnamese engineer or researcher.
 
-  Topic:
+  Query:
   $question
 
-  Context:
+  Context (retrieved sources):
   $context
 
   Output format: $report_format
@@ -14,13 +14,25 @@ template: |
   Current year: $current_year.
 
   Requirements:
-  - The first line MUST be a Markdown H1 title: "# Danh sách đọc: $question".
-  - Start with "## Tóm tắt lựa chọn" explaining the ranking logic.
-  - Group the list into clear sections with numbered items and source URLs.
-  - End with "## Lộ trình đọc đề xuất".
-  - Select 8 to 12 papers or technical resources only if they are present in context.
-  - Prioritize recency, reproducibility, code availability, benchmarks, datasets, and implementation value.
-  - Group results into: Nen tang, Tien bo gan day, Goc nhin khac.
-  - For each item include title as a Markdown link when URL is available, authors if available, year, venue/source, technical contribution, implementation value, and limitations.
-  - Never invent URLs, authors, venues, metrics, or code links. If unavailable, say "Khong co trong ngu canh".
-  - Add a final section with a recommended reading order and why.
+  - The first line MUST be a Markdown H1: "# Danh sách đọc: $question".
+  - Start with "## Tóm tắt lựa chọn" (2–3 sentences on ranking logic and coverage).
+  - Group papers into sections: "### Nền tảng", "### Tiến bộ gần đây", "### Góc nhìn khác".
+  - Select 8–12 papers or resources that are ACTUALLY PRESENT in the context. Never invent papers.
+  - For each paper, use exactly this card format (no extra prose between cards):
+
+    #### N. [Tên bài báo](URL nếu có)
+    **Tác giả** · Năm · Venue
+    **Đóng góp chính**: [1 câu — điều gì mới/khác biệt so với trước đó]
+    **Liên quan đến query**: [1 câu — tại sao bài này trả lời câu hỏi của bạn]
+    **Phương pháp**: [1–2 câu — họ làm gì]
+    **Kết quả nổi bật**: [số liệu/benchmark cụ thể, hoặc "Không có trong ngữ cảnh"]
+    **Verdict**: ⭐ Đọc ngay | 📖 Đọc nếu cần sâu hơn | ℹ️ Tham khảo khi cần
+
+  - Verdict rule: ⭐ for directly answers the query + has strong results; 📖 for relevant but broader scope; ℹ️ for background only.
+  - After all cards, add "## Lộ trình đọc đề xuất": a numbered order with 1-sentence reason for each step.
+  - If authors, year, or venue are not in the context, write "Không rõ" — never guess.
+  - Keep Vietnamese natural; preserve English for model names, metrics, and framework names.
+  - Keep individual sentences under 80 words; split compound ideas into separate sentences.
+  - Each source in the context has a sequential number in its header (e.g. "### Nguồn 1:" or "Source:" with "Title:"). Use those numbers as citation markers: place [N] at the END of EVERY sentence that states a fact, metric, method detail, or result — e.g. "Mô hình đạt 91% F1 [1]." This is mandatory: a sentence without [N] will be treated as uncited.
+  - Do not paste bare URLs in body paragraphs; use [N] inline only.
+  - End with "## Nguồn tham khảo" as a numbered list: "- [N] [Tên nguồn](URL)" using ONLY the exact titles and URLs from the context headers — NEVER invent or paraphrase source titles. Each URL must appear EXACTLY ONCE.

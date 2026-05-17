@@ -23,7 +23,8 @@ def test_report_prompt_uses_yaml_template() -> None:
 
     assert "User question:" in prompt
     assert "https://example.com" in prompt
-    assert "Cite sources inline" in prompt
+    assert "Use those numbers as citation markers" in prompt
+    assert "place [N] at the END of EVERY sentence" in prompt
 
 
 def test_agent_prompt_uses_yaml_template() -> None:

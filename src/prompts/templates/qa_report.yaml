@@ -20,7 +20,9 @@ template: |
   - End with "## Gợi ý áp dụng" for practical usage, limitations, and follow-up checks.
   - Answer directly first, then add supporting evidence.
   - Use only facts grounded in the provided context. If context is weak, say what is uncertain.
-  - Cite sources inline as Markdown links using source titles when available, for example: [Tên nguồn](https://example.com). Do not paste bare URLs in body paragraphs.
-  - End with "## Nguồn tham khảo" as a bullet list of Markdown links.
+  - Each source in the context has a sequential number visible in its header (e.g. "### Nguồn 1:" or "Source:" with "Title:"). Use those numbers as citation markers: place [N] at the END of EVERY sentence that states a fact, statistic, mechanism, or claim — for example: "Kỹ thuật X đạt 92% accuracy [1]." This is mandatory: a sentence without [N] will be treated as uncited.
+  - Do not paste bare URLs in body paragraphs; use [N] inline only.
+  - If multiple sources support the same sentence, list all: "Phương pháp Y hiệu quả hơn Z [1][2]."
+  - Write "## Nguồn tham khảo" as the last section with entries "- [N] [Tên nguồn](URL)" using ONLY the exact titles and URLs present in the context headers — NEVER invent or paraphrase source titles. Each URL must appear EXACTLY ONCE.
   - Prefer practical trade-offs, cost impact, reliability impact, and implementation notes.
   - Keep Vietnamese prose natural; preserve English technical terms when standard.

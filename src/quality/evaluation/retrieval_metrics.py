@@ -4,6 +4,7 @@ from collections.abc import Sequence
 
 from src.quality.evaluation.metrics import (
     JudgeCallable,
+    bilingual_query_coverage,
     build_judge_prompt,
     clamp,
     dcg,
@@ -88,7 +89,12 @@ def context_recall_from_ground_truth(
 def deterministic_context_relevance(query: str, retrieved_contexts: Sequence[RetrievedContext]) -> float:
     if not retrieved_contexts:
         return 0.0
-    scores = [lexical_similarity(query, context.text) for context in retrieved_contexts]
+    # Use bilingual_query_coverage so Vietnamese queries score positively against
+    # English-language contexts that share technical terms with the query.
+    scores = [
+        max(lexical_similarity(query, ctx.text), bilingual_query_coverage(query, ctx.text, threshold=0.25))
+        for ctx in retrieved_contexts
+    ]
     top_weighted = sum(score / (rank + 1) for rank, score in enumerate(scores))
     normalizer = sum(1 / (rank + 1) for rank in range(len(scores)))
     return round(clamp(top_weighted / normalizer), 4)
@@ -216,7 +222,7 @@ def noise_ratio_metric(
     query: str,
     retrieved_contexts: Sequence[RetrievedContext],
     *,
-    relevance_threshold: float = 0.12,
+    relevance_threshold: float = 0.25,
 ) -> MetricResult:
     if not retrieved_contexts:
         return MetricResult(
@@ -226,10 +232,12 @@ def noise_ratio_metric(
             method="embedding_proxy",
             reason="No contexts were retrieved.",
         )
+    # bilingual_query_coverage handles Vietnamese queries against English sources:
+    # falls back to English technical-term matching when lexical coverage is low.
     relevant = [
         context
         for context in retrieved_contexts
-        if lexical_similarity(query, context.text) >= relevance_threshold
+        if bilingual_query_coverage(query, context.text, relevance_threshold) >= relevance_threshold
     ]
     noise = 1 - (len(relevant) / len(retrieved_contexts))
     label = "pass" if noise <= 0.30 else "warn" if noise <= 0.55 else "fail"

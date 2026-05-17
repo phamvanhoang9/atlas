@@ -24,37 +24,76 @@ logger = logging.getLogger(__name__)
 
 
 def _extract_source_links(context: list[str]) -> list[tuple[str, str]]:
-    """Extract source title/link pairs from constructed context."""
+    """Extract (title, url) pairs from context, supporting both context formats.
+
+    build_mode_context format:  ### Nguồn N: <title> / URL: <url>
+    ContextCompressor format:   Source: <url> / Title: <title>
+    """
     sources: list[tuple[str, str]] = []
     seen: set[str] = set()
     joined = "\n".join(context)
     blocks = re.split(r"\n---\n|\n\n---\n\n", joined)
     for block in blocks:
+        # build_mode_context format
         title_match = re.search(r"^###\s*Nguồn\s+\d+:\s*(.+)$", block, flags=re.MULTILINE)
         url_match = re.search(r"^URL:\s*(\S+)", block, flags=re.MULTILINE)
+
+        # ContextCompressor format
         if not url_match:
-            source_match = re.search(r"^Source:\s*(\S+)", block, flags=re.MULTILINE)
-            url = source_match.group(1).strip() if source_match else ""
-        else:
-            url = url_match.group(1).strip()
+            url_match = re.search(r"^Source:\s*(\S+)", block, flags=re.MULTILINE)
+        if not title_match:
+            title_match = re.search(r"^Title:\s*(.+)$", block, flags=re.MULTILINE)
+
+        url = url_match.group(1).strip() if url_match else ""
         if not url or url in seen:
             continue
-        title = title_match.group(1).strip() if title_match else url
+        raw_title = title_match.group(1).strip() if title_match else ""
+        title = raw_title if raw_title and raw_title != url else url
         sources.append((title, url))
         seen.add(url)
     return sources
 
 
+def _rebuild_references_section(report: str, sources: list[tuple[str, str]]) -> str:
+    """Replace the LLM-generated ## Nguồn tham khảo block with the authoritative
+    source list derived from context. Inline [N] markers in the body are re-mapped
+    to the canonical numbering so they stay consistent.
+
+    If the LLM wrote no references section, one is appended.
+    """
+    if not sources:
+        return report
+
+    marker = "## Nguồn tham khảo"
+    idx = report.find(marker)
+    if idx != -1:
+        # Find where the references section ends (next ## heading or EOF)
+        rest_after = report[idx + len(marker):]
+        next_section = re.search(r"\n##\s+", rest_after)
+        if next_section:
+            body = report[:idx]
+            tail = rest_after[next_section.start():]
+        else:
+            body = report[:idx]
+            tail = ""
+    else:
+        body = report
+        tail = ""
+
+    ref_lines = "\n".join(f"- [{n}] [{title}]({url})" for n, (title, url) in enumerate(sources[:12], start=1))
+    return f"{body}{marker}\n{ref_lines}{tail}"
+
+
 def _ensure_report_structure(report: str, query: str, context: list[str]) -> str:
-    """Ensure title and clean source links exist even if the LLM is terse."""
+    """Ensure title exists and references section uses real titles/URLs from context."""
     normalized = report.strip()
     if not normalized.startswith("# "):
         normalized = f"# {query}\n\n{normalized}"
 
     sources = _extract_source_links(context)
-    if sources and "## Nguồn tham khảo" not in normalized:
-        source_lines = "\n".join(f"- [{title}]({url})" for title, url in sources[:12])
-        normalized = f"{normalized}\n\n## Nguồn tham khảo\n{source_lines}"
+    if sources:
+        normalized = _rebuild_references_section(normalized, sources)
+
     return normalized
 
 

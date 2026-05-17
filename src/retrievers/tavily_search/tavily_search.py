@@ -12,16 +12,55 @@ from src.storage import SQLiteTTLCache
 logger = logging.getLogger(__name__)
 
 
+_DEFAULT_INCLUDE_DOMAINS = [
+    "arxiv.org",
+    "openreview.net",
+    "huggingface.co",
+    "scholar.google.com",
+    "proceedings.neurips.cc",
+    "proceedings.mlr.press",
+    "openaccess.thecvf.com",
+    "aclanthology.org",
+    "aaai.org",
+    "ieee.org",
+    "acm.org",
+    "springer.com",
+    "nature.com",
+    "science.org",
+]
+
+_DEFAULT_EXCLUDE_DOMAINS = [
+    "medium.com",
+    "substack.com",
+    "viblo.asia",
+    "hr1tech.com",
+    "fpt.ai",
+    "fpt.com",
+    "youtube.com",
+    "reddit.com",
+    "linkedin.com",
+    "facebook.com",
+    "twitter.com",
+]
+
+
 class TavilySearch:
     """
     Tavily API retriever.
     """
 
-    def __init__(self, query: str) -> None:
+    def __init__(
+        self,
+        query: str,
+        include_domains: list[str] | None = None,
+        exclude_domains: list[str] | None = None,
+    ) -> None:
         """
         Initialize the TavilySearch object.
         """
         self.query = query
+        self.include_domains = include_domains if include_domains is not None else _DEFAULT_INCLUDE_DOMAINS
+        self.exclude_domains = exclude_domains if exclude_domains is not None else _DEFAULT_EXCLUDE_DOMAINS
         self.api_key = self.get_api_key()
         self.client = TavilyClient(self.api_key)
         self.cache_enabled = os.getenv("ENABLE_SEARCH_CACHE", "true").lower() == "true"
@@ -64,35 +103,8 @@ class TavilySearch:
                 self.query,
                 search_depth="advanced",
                 max_results=max_results,
-                include_domains=[
-                    "arxiv.org",
-                    "openreview.net",
-                    "huggingface.co",
-                    "scholar.google.com",
-                    "proceedings.neurips.cc",
-                    "proceedings.mlr.press",
-                    "openaccess.thecvf.com",
-                    "aclanthology.org",
-                    "aaai.org",
-                    "ieee.org",
-                    "acm.org",
-                    "springer.com",
-                    "nature.com",
-                    "science.org",
-                ],
-                exclude_domains=[
-                    "medium.com",
-                    "substack.com",
-                    "viblo.asia",
-                    "hr1tech.com",
-                    "fpt.ai",
-                    "fpt.com",
-                    "youtube.com",
-                    "reddit.com",
-                    "linkedin.com",
-                    "facebook.com",
-                    "twitter.com",
-                ],
+                include_domains=self.include_domains,
+                exclude_domains=self.exclude_domains,
             )
             search_response = [
                 {"href": obj["url"], "body": obj["content"]}
