@@ -203,7 +203,7 @@ const Atlas = (() => {
     const writeReport = (data, converter) => {
       const reportContainer = document.getElementById("reportContainer");
       const markdownOutput = converter.makeHtml(data.output);
-      reportContainer.innerHTML += markdownOutput;
+      reportContainer.innerHTML = markdownOutput;
       updateScroll();
     };
   

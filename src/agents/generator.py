@@ -1,4 +1,4 @@
-"""Generator agent — produces the final report and suggested questions."""
+﻿"""Generator agent — produces the final report and suggested questions."""
 
 from __future__ import annotations
 
@@ -23,6 +23,11 @@ from src.transport.streaming import stream_output
 logger = logging.getLogger(__name__)
 
 
+REFERENCE_HEADING = "## Nguồn tham khảo"
+REFERENCE_HEADING_RE = re.compile(r"(?im)^#{1,6}\s*Nguồn\s+tham\s+khảo\s*$")
+ARXIV_ID_RE = re.compile(r"arxiv\.org/(?:abs|html|pdf)/([0-9]{4}\.[0-9]{4,5})(?:v\d+)?", re.IGNORECASE)
+
+
 def _extract_source_links(context: list[str]) -> list[tuple[str, str]]:
     """Extract (title, url) pairs from context, supporting both context formats.
 
@@ -31,27 +36,257 @@ def _extract_source_links(context: list[str]) -> list[tuple[str, str]]:
     """
     sources: list[tuple[str, str]] = []
     seen: set[str] = set()
-    joined = "\n".join(context)
-    blocks = re.split(r"\n---\n|\n\n---\n\n", joined)
-    for block in blocks:
-        # build_mode_context format
-        title_match = re.search(r"^###\s*Nguồn\s+\d+:\s*(.+)$", block, flags=re.MULTILINE)
-        url_match = re.search(r"^URL:\s*(\S+)", block, flags=re.MULTILINE)
+    joined = "\n---\n".join(context)
 
-        # ContextCompressor format
-        if not url_match:
-            url_match = re.search(r"^Source:\s*(\S+)", block, flags=re.MULTILINE)
-        if not title_match:
-            title_match = re.search(r"^Title:\s*(.+)$", block, flags=re.MULTILINE)
+    patterns = (
+        re.compile(
+            r"(?ms)^###\s*Nguồn\s+\d+:\s*(?P<title>.+?)\nURL:\s*(?P<url>\S+)"
+        ),
+        re.compile(
+            r"(?ms)^Source:\s*(?P<url>\S+)\s*\nTitle:\s*(?P<title>.*?)(?=\n(?:Source:|Content:)|\Z)"
+        ),
+        re.compile(r"(?m)^Source:\s*(?P<url>\S+)"),
+    )
 
-        url = url_match.group(1).strip() if url_match else ""
-        if not url or url in seen:
-            continue
-        raw_title = title_match.group(1).strip() if title_match else ""
-        title = raw_title if raw_title and raw_title != url else url
-        sources.append((title, url))
-        seen.add(url)
+    for pattern in patterns:
+        for match in pattern.finditer(joined):
+            url = match.group("url").strip()
+            if not url or url in seen:
+                continue
+            raw_title = match.groupdict().get("title", "").strip()
+            title = raw_title if raw_title and raw_title != url else url
+            sources.append((title, url))
+            seen.add(url)
     return sources
+
+
+def _split_references_section(report: str) -> tuple[str, str, str] | None:
+    """Return body, heading, and tail for the references section."""
+    match = REFERENCE_HEADING_RE.search(report)
+    if not match:
+        return None
+
+    rest_after = report[match.end():]
+    next_section = re.search(r"\n##\s+", rest_after)
+    if next_section:
+        tail = rest_after[next_section.start():]
+    else:
+        tail = ""
+    return report[:match.start()], match.group(0), tail
+
+
+def _extract_reference_section_sources(report: str) -> list[tuple[str, str]]:
+    """Recover source titles and URLs from an LLM-written references section."""
+    return [
+        (title, url)
+        for _, title, url in _extract_reference_section_source_map(report)
+        if url
+    ]
+
+
+def _extract_reference_section_source_map(report: str) -> list[tuple[int, str, str]]:
+    """Recover numbered source titles and optional URLs from a references section."""
+    match = REFERENCE_HEADING_RE.search(report)
+    if not match:
+        return []
+
+    rest_after = report[match.end():]
+    next_section = re.search(r"\n##\s+", rest_after)
+    references = rest_after[:next_section.start()] if next_section else rest_after
+
+    entries: list[str] = []
+    current = ""
+    for line in references.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if re.match(r"^[-*]?\s*\[+\d+\]+", stripped):
+            if current:
+                entries.append(current)
+            current = stripped
+        elif current:
+            current = f"{current} {stripped}"
+    if current:
+        entries.append(current)
+
+    numbered_sources: list[tuple[int, str, str]] = []
+    seen: set[str] = set()
+    for entry in entries:
+        number_match = re.match(
+            r"^[-*]?\s*\[+(?P<num>\d+)\]+(?:\]\([^)]+\))?(?:\((?P<inline_url>https?://[^)]+)\))?\s*(?P<rest>.*)$",
+            entry,
+        )
+        if not number_match:
+            continue
+
+        source_number = int(number_match.group("num"))
+        inline_url = number_match.group("inline_url")
+        remainder = number_match.group("rest").strip()
+        markdown_link = re.search(r"\[([^\]]+)\]\((https?://[^)]+)\)", remainder)
+        if markdown_link:
+            title = markdown_link.group(1).strip()
+            url = markdown_link.group(2).strip()
+        elif inline_url:
+            url = inline_url.rstrip(".,;)")
+            title = remainder.strip(" .:-")
+        else:
+            url_match = re.search(r"https?://\S+", remainder)
+            if url_match:
+                url = url_match.group(0).rstrip(".,;)")
+                left = re.sub(r"\s*\(\s*$", "", remainder[:url_match.start()])
+                right = re.sub(r"^\s*\)\s*", "", remainder[url_match.end():])
+                title = f"{left} {right}".strip(" .:-")
+            else:
+                url = ""
+                title = remainder.strip(" .:-")
+
+        seen_key = url or f"{source_number}:{title}"
+        if seen_key in seen:
+            continue
+        numbered_sources.append((source_number, _clean_reference_title(title), url))
+        seen.add(seen_key)
+
+    return sorted(numbered_sources)
+
+
+def _clean_reference_title(title: str) -> str:
+    """Remove common citation boilerplate around an otherwise usable title."""
+    cleaned = re.sub(r"\s+", " ", title or "").strip(" .:-")
+    cleaned = re.sub(r"(?i)\.\s*arxiv preprint.*$", "", cleaned).strip(" .:-")
+    cleaned = re.sub(r"(?i),?\s*20\d{2}\.?$", "", cleaned).strip(" .:-")
+    cleaned = re.sub(r"(?i)\bURL\s*$", "", cleaned).strip(" .:-")
+    return cleaned
+
+
+def _fallback_title_from_url(url: str) -> str:
+    """Return a clear non-raw-URL label when no usable title is available."""
+    arxiv_match = ARXIV_ID_RE.search(url)
+    if arxiv_match:
+        return f"arXiv:{arxiv_match.group(1)}"
+    host_match = re.search(r"https?://([^/]+)", url)
+    if not host_match:
+        return "Tài liệu tham khảo"
+    host = host_match.group(1)
+    path_match = re.search(r"https?://[^/]+(/[^?#]+)", url)
+    if path_match:
+        segment = path_match.group(1).rstrip("/").split("/")[-1]
+        if segment and segment not in {"index.html", "index.htm", "index.php", "index"}:
+            return f"Tài liệu từ {host}: {segment}"
+    return f"Tài liệu từ {host}"
+
+
+_NON_CITABLE_EXTENSIONS = {
+    ".diff", ".patch", ".log", ".bin", ".exe", ".zip", ".tar", ".gz",
+    ".lock", ".tmp", ".bak", ".pyc", ".whl", ".egg",
+}
+_HASH_SEGMENT_RE = re.compile(r"^[0-9a-f]{7,64}$", re.IGNORECASE)
+
+
+def _is_citable_url(url: str) -> bool:
+    """Return False for URLs that point to non-citable artifacts (diffs, blobs, hashes)."""
+    if not url:
+        return False
+    path = url.split("?")[0].split("#")[0].rstrip("/")
+    segment = path.split("/")[-1] if "/" in path else ""
+    ext = re.search(r"\.[a-z0-9]+$", segment, re.IGNORECASE)
+    if ext and ext.group(0).lower() in _NON_CITABLE_EXTENSIONS:
+        return False
+    stem = segment.split(".")[0] if "." in segment else segment
+    if stem and _HASH_SEGMENT_RE.match(stem):
+        return False
+    return True
+
+
+def _is_clear_source_title(title: str) -> bool:
+    """Reject context fragments and metadata blobs as visible reference titles."""
+    cleaned = title.strip()
+    lower = cleaned.lower()
+    if not cleaned or re.match(r"^https?://", cleaned):
+        return False
+    if len(cleaned) > 220:
+        return False
+    bad_markers = (
+        "content:",
+        "page_content",
+        "metadata",
+        "'author'",
+        '"author"',
+        "'subject'",
+        '"subject"',
+        "moddate",
+        "creationdate",
+    )
+    if any(marker in lower for marker in bad_markers):
+        return False
+    if lower.startswith(("aim to ", "must ", "they ", "it ", "this ")):
+        return False
+    return True
+
+
+def _merge_sources(context_sources: list[tuple[str, str]], report: str) -> list[tuple[str, str]]:
+    """Use context URLs (authoritative) matched to LLM titles by URL, not by position."""
+    # Build URL → LLM-title lookup so titles follow their actual URLs, not list order.
+    url_to_ref_title: dict[str, str] = {}
+    for _, title, url in _extract_reference_section_source_map(report):
+        if url and url not in url_to_ref_title:
+            url_to_ref_title[url] = title
+
+    merged: list[tuple[str, str]] = []
+    seen_urls: set[str] = set()
+    seen_titles: set[str] = set()
+
+    for context_title, url in context_sources:
+        if not _is_citable_url(url):
+            continue
+        if url in seen_urls:
+            continue
+
+        reference_title = url_to_ref_title.get(url, "")
+        if _is_clear_source_title(reference_title):
+            title = reference_title
+        elif _is_clear_source_title(context_title):
+            title = _clean_reference_title(context_title)
+        else:
+            title = _fallback_title_from_url(url)
+
+        # Skip entries whose display title would duplicate an already-added one.
+        normalized = title.lower().strip()
+        if normalized in seen_titles:
+            continue
+
+        merged.append((title, url))
+        seen_urls.add(url)
+        seen_titles.add(normalized)
+
+    if merged:
+        return merged
+
+    return [
+        (title if _is_clear_source_title(title) else _fallback_title_from_url(url), url)
+        for _, title, url in _extract_reference_section_source_map(report)
+        if url and _is_citable_url(url)
+    ]
+
+
+def _source_title_for_display(title: str, source_number: int) -> str:
+    """Return a non-URL label for reference lists when a title is missing."""
+    return title if _is_clear_source_title(title) else f"Tài liệu tham khảo {source_number}"
+
+
+def _link_inline_citations(report: str, sources: list[tuple[str, str]]) -> str:
+    """Convert inline numeric citation markers such as [1][2] into local anchors."""
+    source_numbers = {str(index) for index, _ in enumerate(sources[:12], start=1)}
+
+    def replace(match: re.Match[str]) -> str:
+        numbers = [number.strip() for number in match.group(1).split(",")]
+        linked = []
+        for number in numbers:
+            if number in source_numbers:
+                linked.append(f"[[{number}]](#source-{number})")
+            # citations beyond the actual source count are silently dropped
+        return "".join(linked)
+
+    return re.sub(r"(?<!\[)\[([0-9]+(?:\s*,\s*[0-9]+)*)\](?!\()", replace, report)
 
 
 def _rebuild_references_section(report: str, sources: list[tuple[str, str]]) -> str:
@@ -64,23 +299,34 @@ def _rebuild_references_section(report: str, sources: list[tuple[str, str]]) -> 
     if not sources:
         return report
 
-    marker = "## Nguồn tham khảo"
-    idx = report.find(marker)
-    if idx != -1:
-        # Find where the references section ends (next ## heading or EOF)
-        rest_after = report[idx + len(marker):]
-        next_section = re.search(r"\n##\s+", rest_after)
-        if next_section:
-            body = report[:idx]
-            tail = rest_after[next_section.start():]
-        else:
-            body = report[:idx]
-            tail = ""
+    references_section = _split_references_section(report)
+    if references_section:
+        body, marker, tail = references_section
     else:
         body = report
+        marker = REFERENCE_HEADING
         tail = ""
 
-    ref_lines = "\n".join(f"- [{n}] [{title}]({url})" for n, (title, url) in enumerate(sources[:12], start=1))
+    body = _link_inline_citations(body, sources)
+    capped = sources[:12]
+    raw_labels = [_source_title_for_display(t, n) for n, (t, _) in enumerate(capped, start=1)]
+    label_counts: dict[str, int] = {}
+    for lbl in raw_labels:
+        label_counts[lbl] = label_counts.get(lbl, 0) + 1
+    label_seen: dict[str, int] = {}
+    display_titles = []
+    for lbl in raw_labels:
+        if label_counts[lbl] > 1:
+            label_seen[lbl] = label_seen.get(lbl, 0) + 1
+            display_titles.append(f"{lbl} ({label_seen[lbl]})")
+        else:
+            display_titles.append(lbl)
+
+    ref_lines = "\n".join(
+        f'- <span id="source-{n}" class="report-source-anchor"></span>[[{n}]](#source-{n}) '
+        f'[{lbl}]({url})'
+        for (n, (_, url)), lbl in zip(enumerate(capped, start=1), display_titles)
+    )
     return f"{body}{marker}\n{ref_lines}{tail}"
 
 
@@ -90,7 +336,7 @@ def _ensure_report_structure(report: str, query: str, context: list[str]) -> str
     if not normalized.startswith("# "):
         normalized = f"# {query}\n\n{normalized}"
 
-    sources = _extract_source_links(context)
+    sources = _merge_sources(_extract_source_links(context), normalized)
     if sources:
         normalized = _rebuild_references_section(normalized, sources)
 
@@ -164,13 +410,18 @@ async def generate_report_node(state: ResearchState) -> dict[str, Any]:
             temperature=cfg.temperature,
             llm_provider=cfg.llm_provider,
             stream=True,
-            websocket=ws,
+            websocket=None,
             max_tokens=cfg.token_limit,
             llm_kwargs=cfg.llm_kwargs,
             report_type=state["report_type"],
         )
 
         report = _ensure_report_structure(report, state["query"], state.get("context", []))
+        if ws:
+            try:
+                await ws.send_json({"type": "report", "output": report, "replace": True})
+            except (RuntimeError, OSError):
+                pass
         quality = ReportValidator().validate(report, state.get("context", []))
         logger.info(
             "Report generation complete chars=%s quality_passed=%s warnings=%s",

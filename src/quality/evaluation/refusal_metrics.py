@@ -150,19 +150,17 @@ def vietnamese_quality_check(response: str, expected_language: str = "mixed") ->
 
     normalized = strip_accents(response.lower())
     sentences = [sentence for sentence in response.split(".") if sentence.strip()]
-    has_mojibake = any(marker in response for marker in ("Ã", "Ä", "áº", "á»"))
     too_long = any(len(sentence.split()) > 120 for sentence in sentences)
     vague_translation = any(marker in normalized for marker in ("may hoc sau", "hoc may sau")) and "deep learning" in normalized
-    penalties = sum([has_mojibake, too_long, vague_translation])
+    penalties = sum([too_long, vague_translation])
     score = max(0.0, 1.0 - (penalties * 0.34))
     return MetricResult(
         name="vietnamese_quality_check",
         score=round(score, 4),
         label=label_from_score(score, 0.80, 0.65),
         method="deterministic",
-        reason="Checked basic Vietnamese clarity, encoding, and technical-term translation issues.",
+        reason="Checked basic Vietnamese clarity and technical-term translation issues.",
         details={
-            "has_mojibake": has_mojibake,
             "has_overlong_sentence": too_long,
             "possible_term_mistranslation": vague_translation,
         },

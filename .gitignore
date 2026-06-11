@@ -120,3 +120,4 @@ CLAUDE.md
 .claude/
 .codex/
 docs/agent-memory/
+.codegraph/
