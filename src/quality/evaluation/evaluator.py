@@ -198,18 +198,22 @@ async def evaluate_state_node(state: dict[str, Any]) -> dict[str, Any]:
         return state
 
     _MODE_DOMAINS = {
-        "hỏi đáp": "qa",
-        "phân tích": "deep_analysis",
-        "đề xuất bài báo": "paper_recommendation",
+        "quick": "qa",
+        "deep": "deep_analysis",
+        "research": "paper_recommendation",
     }
 
     try:
-        report_type = state.get("report_type", "")
+        from src.modes import normalize_mode
+
+        report_type = normalize_mode(state.get("report_type", ""))
         contexts = contexts_from_strings(state.get("context", []), state.get("visited_urls", []))
         from .schemas import EvaluationRubric
+        # Answers follow the query language (D-003): only apply Vietnamese
+        # quality checks when the query itself is Vietnamese.
         rubric = EvaluationRubric(
             domain=_MODE_DOMAINS.get(report_type, "qa"),
-            language="vi",
+            language="vi" if _is_vietnamese(state.get("query", "")) else "en",
         )
         input_data = EvaluationInput(
             sample_id=state.get("history_id"),
@@ -345,15 +349,16 @@ def _build_llm_judge_from_config(cfg: Any) -> Callable[[str], Awaitable[str]] | 
                 {
                     "role": "system",
                     "content": (
-                        "You are a RAG evaluation judge for a bilingual Vietnamese/English research assistant. "
-                        "The system retrieves English academic papers and generates Vietnamese-language reports. "
-                        "Vietnamese responses that accurately paraphrase English source content MUST receive "
-                        "high faithfulness and answer_relevance scores — semantic alignment across languages "
-                        "is correct behavior, NOT a deficiency. "
+                        "You are a RAG evaluation judge for a research assistant. "
+                        "Retrieved sources are usually English; the answer follows the user's query "
+                        "language and may paraphrase sources across languages. Responses that "
+                        "accurately paraphrase source content in another language MUST receive high "
+                        "faithfulness and answer_relevance scores — semantic alignment across "
+                        "languages is correct behavior, NOT a deficiency. "
                         "Assess using the RAG Triad framework: "
-                        "Context Relevance (are retrieved contexts on-topic?), "
-                        "Faithfulness (do Vietnamese claims accurately represent English context content?), "
-                        "Answer Relevance (does the Vietnamese response semantically address the query intent?). "
+                        "Context Relevance (are retrieved contexts on-topic for the query?), "
+                        "Faithfulness (do the response's claims accurately represent context content?), "
+                        "Answer Relevance (does the response semantically address the query intent?). "
                         "Think step-by-step before scoring. Return only strict JSON."
                     ),
                 },
@@ -362,7 +367,7 @@ def _build_llm_judge_from_config(cfg: Any) -> Callable[[str], Awaitable[str]] | 
             temperature=0.0,
             max_tokens=4096,
             stream=False,
-            report_type="phân tích",
+            report_type="deep",
             llm_kwargs=getattr(cfg, "llm_kwargs", {}),
         )
 
@@ -397,7 +402,7 @@ def _build_llm_translator_from_config(cfg: Any) -> Callable[[str], Awaitable[str
             temperature=0.0,
             max_tokens=256,
             stream=False,
-            report_type="hỏi đáp",
+            report_type="quick",
             llm_kwargs=getattr(cfg, "llm_kwargs", {}),
         )
 

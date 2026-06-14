@@ -1,11 +1,13 @@
 <h1 align="center">ATLAS</h1>
 
 <p align="center">
-  <strong>Agentic Task & Literature Analysis System</strong>
+  <strong>Open-source AI intelligence & verified research platform</strong>
 </p>
 
 <p align="center">
-  Turn a messy research question into searched sources, compressed context, a grounded report, a PDF, and searchable history.
+  Ask about the AI landscape. Get a report where every source is quality-scored,
+  every reference URL was actually read, and every day starts with an automated
+  intelligence briefing in your inbox.
 </p>
 
 <p align="center">
@@ -16,358 +18,194 @@
   <img alt="License MIT" src="https://img.shields.io/badge/License-MIT-green">
 </p>
 
-ATLAS is a FastAPI-based research assistant for AI researchers and engineers. It plans research with LangGraph, searches academic sources, scrapes and compresses evidence, writes reports with citations, exports results, and keeps a searchable research history.
+ATLAS is a self-hosted research assistant focused on one domain: **AI** — models,
+papers, tooling, infrastructure, agents, benchmarks. It is built for engineers and
+researchers who need answers they can verify, not just answers.
 
-The project is built for the Vietnamese AI research community, with Vietnamese UI labels and report workflows, while the codebase can be adapted for other research teams and languages.
+## Why ATLAS over another chat tab
 
-## Why ATLAS
+Closed tools can't show you why you should trust them. ATLAS makes the trust
+mechanics inspectable:
 
-Most research assistants stop at chat. ATLAS is built as a workflow:
+- **Transparent source scoring** — every URL is classified into a fixed 9-category
+  taxonomy (peer-reviewed → official docs → arXiv → … → low-quality) with a 0–100
+  score by deterministic, unit-tested rules. No LLM judgment, no black box.
+  Low-quality sources are never primary evidence.
+- **Citations that can't be fabricated** — the model only emits `[N]` markers; the
+  reference list is rebuilt by the system from URLs it actually scraped. Category
+  labels appear next to every reference.
+- **Honest refusals** — non-AI questions get a clear "out of scope" answer with a
+  suggested AI-angle reframe, instead of a confident off-domain hallucination.
+- **Daily AI intelligence automation** — a scheduler runs a deep research pass over
+  your topics every morning and emails the report (SMTP, with a mock mode for dev).
+- **Measured, not vibes** — an offline deterministic benchmark plus an online
+  LLM-judge evaluation (RAG triad, citation coverage, refusal accuracy) gate quality.
 
-- It decomposes a task into focused academic search queries.
-- It favors papers, proceedings, publishers, and research labs over low-signal sources.
-- It compresses retrieved context before generation instead of dumping raw search results into the model.
-- It validates generated reports against collected source URLs.
-- It saves reports, suggested follow-up questions, PDFs, and history for later review.
+## The three research modes
+
+| Mode | What it does |
+| --- | --- |
+| **Quick Answer** (`quick`) | Fast, cited answer to a direct question |
+| **Research** (`research`) | Structured report grounded in papers & official sources |
+| **Deep Research** (`deep`) | Multi-step analysis with impact assessment and confidence levels; paste URLs to deep-dive specific sources |
+
+Legacy Vietnamese mode ids (`hỏi đáp`, `đề xuất bài báo`, `phân tích`) are accepted
+as deprecated aliases so old history entries keep working.
 
 ## Workflow
 
 ```mermaid
 flowchart LR
-    A[Research task] --> B[Choose agent]
+    A[Query] --> S{AI scope gate}
+    S -->|out of scope| R[Honest refusal + reframe]
+    S -->|in scope| B[Agent + query planning]
     B --> C{URLs included?}
     C -->|Yes| D[Scrape provided sources]
-    C -->|No| E[Generate sub-queries]
-    E --> F[Parallel academic search]
-    D --> G[Compress context]
-    F --> G
-    G --> H[Generate report]
-    H --> I[Quality check]
-    I --> J[PDF + history + follow-up questions]
+    C -->|No| E[Parallel web search]
+    E --> F[9-category source scoring & ranking]
+    D --> F
+    F --> G[Context building]
+    G --> H[Report generation with citations]
+    H --> I[Reference rebuild + category labels]
+    I --> J[Optional evaluation]
+    J --> K[PDF + history + follow-up questions]
 ```
 
-## Highlights
+## Quick start
 
-| Area | What ATLAS does |
-| --- | --- |
-| Orchestration | LangGraph nodes for agent selection, query generation, search, context processing, and report generation. |
-| Research modes | Q&A (`hỏi đáp`), paper recommendations (`đề xuất bài báo`), and deep analysis (`phân tích`). |
-| Academic retrieval | Tavily search with DuckDuckGo fallback and academic domain filters. |
-| Source handling | Direct URL extraction, web/PDF scraping, context compression, and source-aware report structure. |
-| Performance | Parallel multi-query search, SQLite search cache, SQLite embedding cache, and optional cross-encoder reranking. |
-| Product surface | Web UI, WebSocket streaming, history sidebar, suggested questions, copy support, and PDF export. |
-| Deployment | Local Uvicorn, Docker, production Compose, SQLite persistence, and optional bearer-token auth. |
+```bash
+git clone <your-repo-url> && cd ATLAS
+python -m venv .venv
+# Windows: .\.venv\Scripts\Activate.ps1   |   macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env          # set OPENAI_API_KEY and TAVILY_API_KEY
+cp config.json.example config.json
+python main.py
+```
 
-## Project Layout
+Open http://127.0.0.1:8000 — the app has three views:
+
+- **Research** — query + mode picker, live progress, streamed report, ranked
+  sources panel with category chips and scores, follow-up questions, PDF export.
+- **Automation** — daily report schedule (time, timezone, email, topics, depth),
+  manual "Run now", and run history with delivery status.
+- **History** — every chat report and daily intelligence report, filterable and
+  searchable.
+
+Sample outputs: [docs/samples/quick-answer-live-sample.md](docs/samples/quick-answer-live-sample.md)
+(real unedited run) and [docs/samples/research-mode-sample.md](docs/samples/research-mode-sample.md)
+(deterministic pipeline demo with the ranking table).
+
+## Daily AI intelligence
+
+Configure once in the **Automation** view (or via REST):
 
 ```text
-ATLAS/
-|-- frontend/              # Jinja-served web UI assets
-|-- src/api/               # FastAPI app, routes, auth, shared dependencies
-|-- src/agents/            # LangGraph node implementations
-|-- src/orchestration/     # Workflow, routers, state, runner
-|-- src/prompts/           # YAML prompt templates and prompt registry
-|-- src/rag/               # Chunking, retrieval, embeddings, reranking
-|-- src/retrievers/        # Search providers
-|-- src/scraping/          # Web/PDF extraction helpers
-|-- src/storage/           # SQLite history and TTL cache
-|-- src/quality/           # Report validation
-|-- tests/                 # Unit and integration tests
-|-- docs/                  # Agent memory and project guidance
-|-- outputs/               # Generated Markdown/PDF reports
-|-- main.py                # Local app entry point
-`-- pyproject.toml         # Project metadata and tool config
+GET/PUT /api/automation/config     # enabled, time, timezone, email, topics, depth
+POST    /api/automation/run        # run now
+GET     /api/automation/runs       # run history with status + email delivery
 ```
 
-## Prerequisites
-
-- Python 3.12 is recommended. The package metadata allows Python 3.10+, but CI and Docker use Python 3.12.
-- OpenAI API key for the default LLM and embedding provider.
-- Tavily API key for web search.
-- Optional Gemini API key if you switch `LLM_PROVIDER=google`.
-- Optional Docker or Docker Desktop for containerized runs.
-
-## Quick Start
-
-1. Clone the repository and enter the project directory.
-
-   ```bash
-   git clone <your-repo-url>
-   cd ATLAS
-   ```
-
-2. Create and activate a virtual environment.
-
-   ```bash
-   python -m venv .venv
-   ```
-
-   Windows PowerShell:
-
-   ```powershell
-   .\.venv\Scripts\Activate.ps1
-   ```
-
-   macOS/Linux:
-
-   ```bash
-   source .venv/bin/activate
-   ```
-
-3. Install dependencies.
-
-   ```bash
-   python -m pip install --upgrade pip
-   pip install -r requirements.txt
-   ```
-
-4. Create your environment file.
-
-   Windows PowerShell:
-
-   ```powershell
-   Copy-Item .env.example .env
-   ```
-
-   macOS/Linux:
-
-   ```bash
-   cp .env.example .env
-   ```
-
-   Edit `.env` and set at least:
-
-   ```env
-   OPENAI_API_KEY=your_openai_key
-   TAVILY_API_KEY=your_tavily_key
-   ```
-
-5. Create a local runtime config.
-
-   ```bash
-   cp config.json.example config.json
-   ```
-
-   On Windows PowerShell:
-
-   ```powershell
-   Copy-Item config.json.example config.json
-   ```
-
-   The current web research runner passes `config.json` explicitly when starting a job, so create this file before submitting tasks.
-
-6. Start the app.
-
-   ```bash
-   python main.py
-   ```
-
-   Or run Uvicorn directly:
-
-   ```bash
-   python -m uvicorn src.api.server:app --reload
-   ```
-
-7. Open the web UI.
-
-   ```text
-   http://127.0.0.1:8000
-   ```
+Email is sent via SMTP (`SMTP_*` env vars); without credentials ATLAS uses a
+**mock mode** that logs the email and records `email_status="mocked"` — clearly
+shown in the UI. The scheduler is in-process: run **one** replica (see
+[docs/deployment.md](docs/deployment.md)).
 
 ## Configuration
 
-ATLAS initializes config fields from environment variables, then loads `config.json`, and finally applies mode-specific overrides for each research mode. For overlapping config fields, the current `config.json` values override matching environment variables.
-
-Common environment variables:
+Precedence: env-var defaults → `config.json` → per-mode overrides at runtime.
 
 | Variable | Purpose |
 | --- | --- |
-| `OPENAI_API_KEY` | Required for default OpenAI LLM and embeddings. |
-| `TAVILY_API_KEY` | Required for Tavily search. |
-| `GEMINI_API_KEY` | Required when `LLM_PROVIDER=google`. |
-| `LLM_PROVIDER` | `openai` or `google`. Defaults to `openai`. |
-| `LLM_MODEL` | Chat model name. Defaults to `gpt-4o-mini`. |
-| `EMBEDDING_PROVIDER` | `openai` or `huggingface`. Defaults to `openai`. |
-| `ATLAS_AUTH_TOKEN` | Enables bearer-token auth for REST and WebSocket routes when set. |
-| `CORS_ORIGINS` | Comma-separated allowed origins. Defaults to local app origins. |
-| `REQUIRE_API_KEYS` | Set `true` in production to fail fast when required keys are missing. |
-| `HISTORY_DB_PATH` | SQLite history path. Defaults to `.atlas_data/history.sqlite`. |
-| `ATLAS_CACHE_DB` | SQLite cache path. Defaults to `.atlas_cache/cache.sqlite`. |
-| `ENABLE_SEARCH_CACHE` | Enables cached search results. Defaults to `true` at runtime. |
-| `ENABLE_EMBEDDING_CACHE` | Enables cached embeddings. Defaults to `true` at runtime. |
-| `ENABLE_CROSS_ENCODER_RERANKING` | Enables local cross-encoder reranking when dependencies/model are available. |
-| `ENABLE_PARALLEL_SEARCH` | Enables parallel search for multi-query modes. Defaults to `true`. |
-| `ATLAS_LOG_LEVEL` | Logging level for ATLAS modules. Defaults to `INFO`. |
+| `OPENAI_API_KEY` | Required — default LLM + embeddings |
+| `TAVILY_API_KEY` | Required for real web search |
+| `ATLAS_AUTH_TOKEN` | Bearer/query token auth for REST + WS; unset = open (local dev only) |
+| `LLM_PROVIDER` / `LLM_MODEL` | `openai` (default `gpt-4o-mini`; deep mode auto-upgrades) or `google` |
+| `ENABLE_EVALUATION` | Run the in-workflow evaluation step |
+| `EMAIL_MODE`, `SMTP_*` | Daily-report email delivery (mock fallback) |
+| `HISTORY_DB_PATH`, `ATLAS_CACHE_DB` | SQLite locations |
+| `ENABLE_SEARCH_CACHE`, `ENABLE_EMBEDDING_CACHE` | Cost-control caches |
+| `ENABLE_CROSS_ENCODER_RERANKING` | Local reranker for context compression |
 
-Runtime configuration values such as token limits, chunking, similarity threshold, report format, max search results, and total report words can be set in `config.json` or through matching environment variables. Use `config.json.example` as the starting point.
+Full annotated list in [.env.example](.env.example).
 
-## Research Modes
+## API surface
 
-| Mode value | UI label | Behavior |
-| --- | --- | --- |
-| `hỏi đáp` | Hỏi đáp | Fast Q&A. Generates one extra search query plus the original query, uses fewer results, and targets shorter answers. |
-| `đề xuất bài báo` | Đề xuất bài báo | Paper recommendation mode. Generates a broader set of academic queries and produces a longer reading list. |
-| `phân tích` | Phân tích | Deep analysis mode. With URLs, analyzes the provided source or paper directly. Without URLs, performs topic analysis across multiple sources. |
+| Route | Purpose |
+| --- | --- |
+| `GET /` | App shell |
+| `GET /health` | Health check |
+| `WS /ws` | Research job + streaming (`logs`, `sources`, `report`, `refusal`, `quality_check`, `suggested_questions`, `evaluation`, `path`) |
+| `GET/DELETE /api/history…` | History list/entry/search/export/stats/clear |
+| `GET/PUT/POST /api/automation/…` | Automation config, manual run, run history |
 
-The app automatically extracts URLs from the task text. If URLs are present, the workflow skips query generation and scrapes the provided sources directly.
+WS request: `start {"task": "...", "report_type": "quick|research|deep"}`.
+Auth (when enabled): `Authorization: Bearer <token>` or `?token=<token>`.
 
-## Example Prompts
+## Tests, benchmark, evaluation
 
-Use these as starting points:
-
-| Goal | Mode | Prompt |
-| --- | --- | --- |
-| Quick technical answer | `hỏi đáp` | `What is speculative decoding, and when does it help LLM serving?` |
-| Reading list | `đề xuất bài báo` | `Recommend recent papers on agentic RAG systems with code or benchmarks.` |
-| Topic deep dive | `phân tích` | `Compare GraphRAG, RAPTOR, and standard vector RAG for long-context QA.` |
-| Paper/source analysis | `phân tích` | `Analyze this paper and explain the implementation details: https://arxiv.org/abs/...` |
-
-## Usage
-
-### Web UI
-
-1. Enter a research question, topic, or prompt with URLs.
-2. Choose a research mode.
-3. Submit the task and watch progress stream in real time.
-4. Review the generated report, quality check, suggested follow-up questions, and exported PDF/Markdown file.
-5. Use the history sidebar to search, reopen, export, or delete previous runs.
-
-Generated files are written to `outputs/`. Research history is stored in SQLite under `.atlas_data/` by default.
-
-### WebSocket API
-
-Connect to:
-
-```text
-ws://127.0.0.1:8000/ws
+```bash
+python -m pytest                  # full suite (152 tests)
+python -m ruff check src tests scripts main.py
+python run_benchmark.py           # offline deterministic eval benchmark (no API keys)
+python run_eval.py quick          # full online pipeline + LLM-judge evaluation
 ```
 
-Send a message with the `start ` prefix:
-
-```text
-start {"task": "Compare LoRA and adapter tuning", "report_type": "phân tích"}
-```
-
-The server streams JSON messages such as:
-
-- `history_id`: ID of the created history entry.
-- `logs`: progress updates.
-- `report`: report content streamed from the LLM.
-- `quality_check`: report validation metadata.
-- `suggested_questions`: follow-up questions.
-- `path`: generated PDF or Markdown path.
-
-When `ATLAS_AUTH_TOKEN` is set, pass the token as either `Authorization: Bearer <token>` or `?token=<token>`.
-
-### History REST API
-
-History endpoints are mounted under `/api/history`:
-
-```text
-GET    /api/history
-GET    /api/history?limit=10
-GET    /api/history/stats
-GET    /api/history/search/{search_term}
-GET    /api/history/{entry_id}
-GET    /api/history/export
-DELETE /api/history/{entry_id}
-DELETE /api/history
-```
-
-These routes use the same optional bearer-token auth as the WebSocket route.
+How the trust and evaluation systems work:
+[docs/research-system.md](docs/research-system.md) ·
+[docs/evaluation.md](docs/evaluation.md)
 
 ## Docker
 
-For local Docker Compose:
-
 ```bash
-docker compose up -d --build
+docker compose up -d --build                          # development
+docker compose -f docker-compose.prod.yml up -d --build   # production (localhost-bound; put TLS proxy in front)
 ```
 
-For production-style Compose:
+Deployment guide (proxy config, env vars, backups, single-replica constraint):
+[docs/deployment.md](docs/deployment.md) · Security model: [docs/security.md](docs/security.md)
 
-```bash
-docker compose -f docker-compose.prod.yml up -d --build
-```
+## Documentation
 
-The production compose file:
-
-- binds the app to `127.0.0.1:8000`,
-- enables required API-key validation,
-- stores history in `.atlas_data/`,
-- stores cache data in `.atlas_cache/`,
-- enables search and embedding caches,
-- enables cross-encoder reranking,
-- persists generated reports in `outputs/`.
-
-If your Docker installation uses the legacy command, replace `docker compose` with `docker-compose`.
-
-## Releases
-
-Stable versions are available from the repository's GitHub Releases page. Releases are created from Git tags such as `v1.0.0`, and GitHub provides source code archives for each release.
-
-ATLAS requires users to provide their own API keys in a local `.env` file copied from `.env.example`. Never commit real API keys, `.env` files, local `config.json` files, credentials, caches, SQLite databases, or generated reports.
+| Doc | Contents |
+| --- | --- |
+| [docs/user-guide.md](docs/user-guide.md) | Using the three modes, automation, and history |
+| [docs/research-system.md](docs/research-system.md) | Source taxonomy, citation system, trust pipeline |
+| [docs/evaluation.md](docs/evaluation.md) | Metrics, thresholds, benchmark design |
+| [docs/architecture.md](docs/architecture.md) | System design |
+| [docs/deployment.md](docs/deployment.md) / [docs/security.md](docs/security.md) | Running it for real |
+| [docs/roadmap.md](docs/roadmap.md) | What's next |
+| [docs/prd.md](docs/prd.md) / [docs/product.md](docs/product.md) | Product definition |
 
 ## Development
 
-Install the same dependencies used in CI:
-
-```bash
-pip install -r requirements.txt
-```
-
-Run the checks:
-
 ```bash
 python -m compileall -q src main.py
-ruff check src tests main.py
+ruff check src tests scripts main.py
 python -m pytest
 ```
 
-Useful local test settings:
+Contributor conventions: API routes in `src/api`, workflow in `src/orchestration`,
+node behavior in `src/agents`, modes in `src/modes`, prompts in YAML under
+`src/prompts/templates` (never hard-coded), source quality in `src/quality`,
+automation in `src/automation`. Add tests for behavior changes; never commit
+`.env`, `.atlas_data/`, `.atlas_cache/`, or `outputs/`.
 
-```env
-ENABLE_SEARCH_CACHE=false
-ENABLE_EMBEDDING_CACHE=false
-ENABLE_CROSS_ENCODER_RERANKING=false
-```
+## Known limitations
 
-Most tests mock external providers, but setting placeholder API keys can make local runs match CI:
-
-```env
-OPENAI_API_KEY=test-openai-key
-TAVILY_API_KEY=test-tavily-key
-GEMINI_API_KEY=test-gemini-key
-```
-
-## Contributor Notes
-
-- Keep changes aligned with the existing module boundaries: API routes in `src/api`, workflow logic in `src/orchestration`, node behavior in `src/agents`, prompts in `src/prompts/templates`, and storage concerns in `src/storage`.
-- Prefer adding focused tests in `tests/` for workflow routing, config behavior, provider wrappers, storage, and report validation changes.
-- Prompt changes should be made in YAML templates and covered by prompt registry tests when behavior changes.
-- Avoid committing generated runtime data from `.atlas_cache/`, `.atlas_data/`, or `outputs/`.
-- Run `ruff check src tests main.py` and `python -m pytest` before opening a pull request.
-
-## Further Reading
-
-- `AGENTS.md` for repository guidance used by coding agents.
-- `RELEASE.md` for tag-driven release steps and release safety checks.
-- `docs/agent-memory/PROJECT_STATE.md` for the current project state.
-- `docs/agent-memory/DECISIONS.md` for durable architecture and process decisions.
-- `docs/agent-memory/NEXT_STEPS.md` for open follow-up work.
-- `docs/agent-memory/TASK_LOG.md` for recent agent work summaries.
-
-## Troubleshooting
-
-- Missing `TAVILY_API_KEY`: search cannot start unless Tavily is configured. The retriever can fall back to DuckDuckGo only after Tavily is initialized.
-- Missing `OPENAI_API_KEY`: default LLM and embeddings will fail. Set `LLM_PROVIDER=google` only when Gemini is configured.
-- Port already in use: run Uvicorn with another port, for example `python -m uvicorn src.api.server:app --reload --port 8001`.
-- Unauthorized API/WebSocket response: remove `ATLAS_AUTH_TOKEN` for local development or pass the configured token.
-- PDF export fallback: if PyMuPDF cannot render a PDF, ATLAS returns the generated Markdown path instead.
+- Inline citation *numbering* trusts the LLM (anchors and URLs are system-built;
+  a claim can cite the wrong real source). Measured by the evaluation layer;
+  runtime NLI checking is on the roadmap.
+- Daily report quality depends on search quality for the day.
+- Single-replica scheduler; no rate limiting (front with a proxy);
+  single shared auth token. See [docs/security.md](docs/security.md) §6.
 
 ## Acknowledgements
 
-The initial idea was inspired by [GPT Researcher](https://github.com/assafelovic/gpt-researcher). ATLAS builds on that general direction with a LangGraph-based workflow, Vietnamese research-oriented UI, mode-specific report behavior, academic source filtering, history storage, and PDF export.
+Originally inspired by [GPT Researcher](https://github.com/assafelovic/gpt-researcher).
+ATLAS diverges with an AI-domain scope gate, a deterministic source-quality system,
+rebuilt verifiable citations, daily intelligence automation, and an evaluation
+harness.
 
 ## License
 

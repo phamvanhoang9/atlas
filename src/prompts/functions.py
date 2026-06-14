@@ -2,7 +2,36 @@
 
 from datetime import datetime
 
+from src.modes import DEEP, QUICK, get_mode_spec, normalize_mode
 from src.prompts.registry import render_prompt
+
+
+_SEARCH_POLICIES = {
+    "quick": (
+        "Broad, trustworthy web coverage: official docs, AI lab blogs, GitHub\n"
+        "repos, credible engineering blogs, and technical discussions. Do NOT\n"
+        "restrict to academic papers. Avoid SEO spam and content farms."
+    ),
+    "research": (
+        "High-quality primary sources: papers, preprints, benchmarks, model\n"
+        "cards, and official announcements. Include at least one strong\n"
+        "academic operator per query when sensible: site:arxiv.org, paper,\n"
+        "benchmark, NeurIPS, ICML, ICLR, ACL. Prefer 'github', 'benchmark',\n"
+        "'dataset', 'evaluation' terms when relevant."
+    ),
+    "deep": (
+        "Mixed multi-angle coverage: combine academic queries (site:arxiv.org,\n"
+        "paper, benchmark) with official announcements, GitHub repositories,\n"
+        "and credible engineering analyses. Cover technical mechanisms,\n"
+        "real-world adoption, costs, and criticisms across the query set."
+    ),
+}
+
+_GOOD_EXAMPLES = {
+    "quick": '["LLM KV cache quantization production support", "vLLM KV cache quantization docs"]',
+    "research": '["RAG chunking strategies site:arxiv.org 2026", "retrieval augmented generation chunk size benchmark dataset"]',
+    "deep": '["speculative decoding paper benchmark 2026", "speculative decoding vLLM TensorRT-LLM adoption", "speculative decoding limitations production"]',
+}
 
 
 def auto_agent_instructions() -> str:
@@ -13,13 +42,21 @@ def auto_agent_instructions() -> str:
     return prompt
 
 
-def generate_search_queries_prompt(question: str, max_iterations: int = 1) -> str:
-    """Load the search query generation prompt."""
+def generate_scope_gate_prompt(query: str) -> str:
+    """Load the AI-domain scope gate prompt."""
+    prompt = render_prompt("scope_gate", {"query": query})
+    if prompt is None:
+        raise ValueError("Missing scope_gate.yaml template")
+    return prompt
+
+
+def generate_search_queries_prompt(question: str, max_iterations: int = 1, mode: str | None = None) -> str:
+    """Load the search query generation prompt with the mode's search policy."""
     current_year = datetime.now().year
-    
+    canonical = normalize_mode(mode) if mode else QUICK
+
     format_example = '["query 1", "query 2"]' if max_iterations > 1 else '["query 1"]'
-    good_example = '["RAG chunking strategies site:arxiv.org 2024", "retrieval augmented generation chunk size performance dataset"]'
-    
+
     prompt = render_prompt(
         "query_generation",
         {
@@ -28,7 +65,8 @@ def generate_search_queries_prompt(question: str, max_iterations: int = 1) -> st
             "current_year": current_year,
             "previous_year": current_year - 1,
             "format_example": format_example,
-            "good_example": good_example,
+            "search_policy": _SEARCH_POLICIES[canonical],
+            "good_example": _GOOD_EXAMPLES[canonical],
         },
     )
     if prompt is None:
@@ -52,14 +90,18 @@ def generate_suggested_questions_prompt(query: str, report: str, report_type: st
     return prompt
 
 
-def get_report_by_type(report_type: str) -> callable:
-    """Get the appropriate report generation prompt based on type."""
+def get_report_by_type(report_type: str, has_source_urls: bool = False) -> callable:
+    """Get the report generation prompt renderer for a mode.
+
+    Mode → template mapping lives in the mode registry. Deep research with
+    user-provided URLs uses the source-analysis template instead of the
+    broad deep-research one.
+    """
+    spec = get_mode_spec(report_type)
+    template_name = spec.url_report_template if has_source_urls else spec.report_template
+
     def _render(query: str, context: list[str], report_format: str, total_words: int) -> str:
         # Context is passed as a list of strings and formatted by _normalize_value in render_prompt
-        template_name = "qa_report"
-        if report_type == "đề xuất bài báo":
-            template_name = "paper_recommendation"
-            
         prompt = render_prompt(
             template_name,
             {
@@ -73,39 +115,31 @@ def get_report_by_type(report_type: str) -> callable:
         if prompt is None:
             raise ValueError(f"Missing {template_name}.yaml template")
         return prompt
-        
+
     return _render
 
 
-def generate_paper_analysis_prompt(query: str, context: list[str], report_format: str, total_words: int) -> str:
-    """Load the paper analysis prompt."""
-    prompt = render_prompt(
-        "paper_analysis",
-        {
-            "question": query,
-            "context": context,
-            "report_format": report_format,
-            "total_words": total_words,
-            "current_year": datetime.now().year,
-        },
+def system_role_for_mode(report_type: str, has_source_urls: bool = False) -> str:
+    """Default system role per mode, used when agent selection yields none."""
+    canonical = normalize_mode(report_type)
+    if canonical == DEEP and has_source_urls:
+        return (
+            "You are an AI researcher explaining the provided source documents in depth. "
+            "Use ONLY information from the provided sources, never training knowledge. "
+            "Guide the reader to understand and apply the work."
+        )
+    if canonical == DEEP:
+        return (
+            "You are a senior AI intelligence analyst. Stay strictly on the asked topic. "
+            "Synthesize insights across sources, analyze contradictions, and assess "
+            "engineering and product impact with explicit confidence levels."
+        )
+    if canonical == QUICK:
+        return (
+            "You are a precise AI research assistant. Answer directly, ground every "
+            "claim in the provided sources, and flag uncertainty honestly."
+        )
+    return (
+        "You are an AI research analyst. Prioritize primary sources, separate fact "
+        "from interpretation and hype, and tie every claim to a citation."
     )
-    if prompt is None:
-        raise ValueError("Missing paper_analysis.yaml template")
-    return prompt
-
-
-def generate_topic_analysis_prompt(query: str, context: list[str], report_format: str, total_words: int) -> str:
-    """Load the topic analysis prompt."""
-    prompt = render_prompt(
-        "topic_analysis",
-        {
-            "question": query,
-            "context": context,
-            "report_format": report_format,
-            "total_words": total_words,
-            "current_year": datetime.now().year,
-        },
-    )
-    if prompt is None:
-        raise ValueError("Missing topic_analysis.yaml template")
-    return prompt

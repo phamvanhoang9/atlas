@@ -8,7 +8,11 @@ from typing import Any
 
 from src.llm.completion import create_chat_completion
 from src.orchestration.state import ResearchState
-from src.prompts.functions import auto_agent_instructions, generate_search_queries_prompt
+from src.prompts.functions import (
+    auto_agent_instructions,
+    generate_search_queries_prompt,
+    system_role_for_mode,
+)
 from src.transport.streaming import stream_output
 
 
@@ -29,7 +33,10 @@ def _clean_json_response(response: str) -> str:
 
 async def choose_agent_node(state: ResearchState) -> dict[str, Any]:
     """Select a specialist agent based on the query."""
-    await stream_output("logs", f"🔎 Đang tìm kiếm thông tin cho '{state['query']}'...", state.get("websocket"))
+    await stream_output("logs", f"Researching '{state['query']}'...", state.get("websocket"))
+
+    default_agent = "AI Research Agent"
+    default_role = system_role_for_mode(state.get("report_type", ""), bool(state.get("source_urls")))
 
     try:
         response = await create_chat_completion(
@@ -45,19 +52,15 @@ async def choose_agent_node(state: ResearchState) -> dict[str, Any]:
         )
 
         agent_dict = json.loads(_clean_json_response(response))
-        agent = agent_dict.get("server", "🔬 Agent Nghiên cứu AI")
-        agent_role = agent_dict.get("agent_role_prompt", "Bạn là một nhà nghiên cứu AI chuyên nghiệp.")
+        agent = agent_dict.get("server", default_agent)
+        agent_role = agent_dict.get("agent_role_prompt", default_role)
 
-        await stream_output("logs", f"✅ Chọn agent: {agent}", state.get("websocket"))
+        await stream_output("logs", f"Selected agent: {agent}", state.get("websocket"))
         return {**state, "agent": agent, "agent_role": agent_role}
 
     except (RuntimeError, OSError, ValueError, TypeError, KeyError) as exc:
-        logger.warning("Lỗi khi chọn agent: %s, sử dụng mặc định", exc)
-        return {
-            **state,
-            "agent": "🔬 Agent Nghiên cứu AI",
-            "agent_role": "Bạn là một nhà nghiên cứu AI chuyên nghiệp.",
-        }
+        logger.warning("Agent selection failed: %s, using default", exc)
+        return {**state, "agent": default_agent, "agent_role": default_role}
 
 
 async def generate_sub_queries_node(state: ResearchState) -> dict[str, Any]:
@@ -69,7 +72,11 @@ async def generate_sub_queries_node(state: ResearchState) -> dict[str, Any]:
             model=state["cfg"].llm_model,
             messages=[
                 {"role": "system", "content": "You are a research assistant. You MUST respond with ONLY a valid JSON array."},
-                {"role": "user", "content": generate_search_queries_prompt(state["query"], max_iterations=max_iterations)},
+                {"role": "user", "content": generate_search_queries_prompt(
+                    state["query"],
+                    max_iterations=max_iterations,
+                    mode=state.get("report_type"),
+                )},
             ],
             temperature=state["cfg"].temperature,
             llm_provider=state["cfg"].llm_provider,
@@ -84,10 +91,10 @@ async def generate_sub_queries_node(state: ResearchState) -> dict[str, Any]:
         sub_queries = [q for q in sub_queries if q and isinstance(q, str) and len(q.strip()) > 0]
         sub_queries.append(state["query"])
 
-        await stream_output("logs", f"✅ Khởi tạo {len(sub_queries)} sub-queries", state.get("websocket"))
+        await stream_output("logs", f"Generated {len(sub_queries)} sub-queries", state.get("websocket"))
         await stream_output(
             "logs",
-            f"🧠 Tiến hành tìm kiếm thông tin dựa vào các nội dung sau: {sub_queries}...",
+            f"Searching for: {sub_queries}...",
             state.get("websocket"),
         )
         return {**state, "sub_queries": sub_queries, "current_query_index": 0}

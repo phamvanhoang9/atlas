@@ -1,10 +1,14 @@
 """Quick eval runner — always runs evaluation regardless of ENABLE_EVALUATION env var.
 
+Runs the full online pipeline (search → scrape → report) and the in-workflow
+evaluation step against real APIs. For the offline, deterministic benchmark use
+``run_benchmark.py`` instead.
+
 Usage:
-    python run_eval.py                                      # default query, hỏi đáp mode
-    python run_eval.py "phân tích"                         # default query, custom mode
-    python run_eval.py "hỏi đáp" "your query here"        # custom mode and query
-    python run_eval.py --all                               # benchmark all 3 modes
+    python run_eval.py                                  # default query, quick mode
+    python run_eval.py deep                             # default query, deep mode
+    python run_eval.py research "your query here"       # custom mode and query
+    python run_eval.py --all                            # benchmark all 3 modes
 """
 import argparse
 import asyncio
@@ -13,7 +17,7 @@ import logging
 import os
 import sys
 
-# Force UTF-8 stdout/stderr so Vietnamese characters print correctly on Windows.
+# Force UTF-8 stdout/stderr so non-ASCII output prints correctly on Windows.
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
@@ -28,39 +32,40 @@ logging.basicConfig(
 )
 
 # Mode-specific default queries chosen to be unambiguous so Tavily returns
-# on-topic inference/latency papers rather than training-optimization papers.
+# on-topic inference/latency sources rather than training-optimization ones.
 _MODE_QUERIES: dict[str, str] = {
-    "hỏi đáp": (
-        "Graph RAG khác với RAG truyền thống ở điểm nào?"
+    "quick": "How does Graph RAG differ from traditional RAG?",
+    "deep": (
+        "Analyze the main techniques for optimizing LLM inference latency: "
+        "KV cache, continuous batching, speculative decoding, and quantization"
     ),
-    "phân tích": (
-        "Phân tích các kỹ thuật tối ưu hóa inference latency của LLM: "
-        "KV cache, continuous batching, speculative decoding và quantization"
-    ),
-    "đề xuất bài báo": (
-        "Đề xuất các bài báo nghiên cứu mới nhất về tối ưu hóa tốc độ inference "
-        "của mô hình ngôn ngữ lớn (LLM serving, throughput, latency)"
+    "research": (
+        "Recommend recent research papers on optimizing large language model "
+        "inference speed (LLM serving, throughput, latency)"
     ),
 }
 
+# Canonical ids plus accepted shorthands and deprecated legacy ids (D-004).
 _MODE_ALIASES: dict[str, str] = {
-    # English aliases
-    "qa":       "hỏi đáp",
-    "analysis": "phân tích",
-    "paper":    "đề xuất bài báo",
-    # Vietnamese names (direct)
-    "hỏi đáp":         "hỏi đáp",
-    "phân tích":        "phân tích",
-    "đề xuất bài báo":  "đề xuất bài báo",
+    "quick": "quick",
+    "research": "research",
+    "deep": "deep",
+    # English shorthands
+    "qa": "quick",
+    "paper": "research",
+    "analysis": "deep",
+    # Deprecated Vietnamese mode ids
+    "hỏi đáp": "quick",
+    "đề xuất bài báo": "research",
+    "phân tích": "deep",
 }
 
 
 def parse_args() -> argparse.Namespace:
-    aliases = ", ".join(f"{k} → {v}" for k, v in _MODE_ALIASES.items() if k in {"qa", "analysis", "paper"})
     parser = argparse.ArgumentParser(
-        description="Run ATLAS evaluation without a WebSocket server.",
+        description="Run ATLAS online evaluation without a WebSocket server.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=f"Mode aliases (English shorthand):\n  {aliases}",
+        epilog="Modes: quick | research | deep  (aliases: qa, paper, analysis)",
     )
     parser.add_argument(
         "--all",
@@ -70,8 +75,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "mode",
         nargs="?",
-        default="qa",
-        help="Research mode: qa | analysis | paper  (default: qa)",
+        default="quick",
+        help="Research mode: quick | research | deep  (default: quick)",
     )
     parser.add_argument(
         "query",
@@ -84,7 +89,7 @@ def parse_args() -> argparse.Namespace:
     if not args.all:
         resolved = _MODE_ALIASES.get(args.mode)
         if resolved is None:
-            parser.error(f"Unknown mode {args.mode!r}. Choose from: qa, analysis, paper")
+            parser.error(f"Unknown mode {args.mode!r}. Choose from: quick, research, deep")
         args.mode = resolved
         if args.query is None:
             args.query = _MODE_QUERIES[args.mode]

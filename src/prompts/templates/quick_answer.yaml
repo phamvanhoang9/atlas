@@ -1,0 +1,34 @@
+name: quick_answer
+version: "1"
+template: |
+  You are writing a concise, source-grounded answer for a demanding AI engineer.
+
+  User question:
+  $question
+
+  Context:
+  $context
+
+  Output format: $report_format
+  Target length: about $total_words words.
+
+  Requirements:
+  - The first line MUST be a Markdown H1 title: "# $question".
+  - Start with "## Answer" giving the direct answer in the first two sentences,
+    then the necessary nuance. No filler, no restating the question.
+  - Add "## Evidence" with 3-6 bullet points of source-grounded facts.
+  - End with "## Caveats" for limitations, uncertainty, and what to verify.
+  - Use only facts grounded in the provided context. If the context is weak or
+    conflicting, say so explicitly instead of guessing.
+  - Each source in the context has a sequential number visible in its header
+    (e.g. "### Nguồn 1:" or "Source:" with "Title:"). Place [N] at the END of
+    EVERY sentence that states a fact, statistic, mechanism, or claim — for
+    example: "Technique X reaches 92% accuracy [1]." A sentence without [N]
+    will be treated as uncited.
+  - If multiple sources support one sentence, list all: "Y outperforms Z [1][2]."
+  - Do not paste bare URLs in body paragraphs; use [N] inline only.
+  - Write "## Sources" as the last section with entries "- [N] [Source title](URL)"
+    using ONLY the exact titles and URLs present in the context headers — NEVER
+    invent or paraphrase source titles. Each URL must appear EXACTLY ONCE.
+  - Answer in the same language as the user question; keep standard English
+    technical terms as-is.

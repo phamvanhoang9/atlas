@@ -48,9 +48,14 @@ class SQLiteHistoryManager:
                 connection.execute(
                     "ALTER TABLE history ADD COLUMN evaluation_result TEXT NOT NULL DEFAULT '{}'"
                 )
+            if "kind" not in columns:
+                connection.execute(
+                    "ALTER TABLE history ADD COLUMN kind TEXT NOT NULL DEFAULT 'chat'"
+                )
             connection.execute("CREATE INDEX IF NOT EXISTS idx_history_timestamp ON history(timestamp DESC)")
 
     def _row_to_entry(self, row: sqlite3.Row) -> dict[str, Any]:
+        keys = row.keys()
         return {
             "id": row["id"],
             "timestamp": row["timestamp"],
@@ -61,6 +66,7 @@ class SQLiteHistoryManager:
             "pdf_path": row["pdf_path"],
             "preview": row["preview"],
             "evaluation_result": json.loads(row["evaluation_result"]),
+            "kind": row["kind"] if "kind" in keys else "chat",
         }
 
     def add_entry(
@@ -71,6 +77,7 @@ class SQLiteHistoryManager:
         suggested_questions: Optional[list[str]] = None,
         pdf_path: str = "",
         evaluation_result: Optional[dict[str, Any]] = None,
+        kind: str = "chat",
     ) -> str:
         entry_id = str(uuid.uuid4())
         preview = self._generate_preview(report)
@@ -78,8 +85,8 @@ class SQLiteHistoryManager:
             connection.execute(
                 """
                 INSERT INTO history (
-                    id, timestamp, query, mode, report, suggested_questions, pdf_path, preview, evaluation_result
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    id, timestamp, query, mode, report, suggested_questions, pdf_path, preview, evaluation_result, kind
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     entry_id,
@@ -91,6 +98,7 @@ class SQLiteHistoryManager:
                     pdf_path,
                     preview,
                     json.dumps(evaluation_result or {}, ensure_ascii=False),
+                    kind,
                 ),
             )
         return entry_id
@@ -131,12 +139,16 @@ class SQLiteHistoryManager:
                 ),
             )
 
-    def get_all_entries(self, limit: Optional[int] = None) -> list[dict[str, Any]]:
-        sql = "SELECT * FROM history ORDER BY timestamp DESC"
-        parameters: tuple[int, ...] = ()
+    def get_all_entries(self, limit: Optional[int] = None, kind: Optional[str] = None) -> list[dict[str, Any]]:
+        sql = "SELECT * FROM history"
+        parameters: list[Any] = []
+        if kind is not None:
+            sql += " WHERE kind = ?"
+            parameters.append(kind)
+        sql += " ORDER BY timestamp DESC"
         if limit is not None:
             sql += " LIMIT ?"
-            parameters = (limit,)
+            parameters.append(limit)
 
         with self._connect() as connection:
             rows = connection.execute(sql, parameters).fetchall()

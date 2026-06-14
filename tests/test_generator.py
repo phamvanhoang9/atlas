@@ -34,7 +34,7 @@ Reliability needs repeated checks [1, 2].
     assert "controls [[1]](#source-1)[[2]](#source-2)." in normalized
     assert "checks [[1]](#source-1)[[2]](#source-2)." in normalized
     assert '- <span id="source-1" class="report-source-anchor"></span>[[1]](#source-1) [Security Considerations for Artificial Intelligence Agents](https://arxiv.org/html/2603.12230v2)' in normalized
-    assert '- <span id="source-2" class="report-source-anchor"></span>[[2]](#source-2) [Tài liệu từ example.com: source-without-title](https://example.com/source-without-title)' in normalized
+    assert '- <span id="source-2" class="report-source-anchor"></span>[[2]](#source-2) [Document from example.com: source-without-title](https://example.com/source-without-title)' in normalized
     assert "Nguồn 2" not in normalized
     assert "Security Considerations for Artificial Intelligence Agents. https://arxiv.org" not in normalized
 
@@ -50,7 +50,7 @@ def test_ensure_report_structure_appends_clickable_references_for_mode_reports()
         normalized = _ensure_report_structure(report, "Agent security", CONTEXT)
 
         assert "[[1]](#source-1)" in normalized
-        assert "## Nguồn tham khảo" in normalized
+        assert "## Sources" in normalized
         assert "[Security Considerations for Artificial Intelligence Agents](https://arxiv.org/html/2603.12230v2)" in normalized
 
 

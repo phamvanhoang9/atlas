@@ -7,6 +7,13 @@ from typing import Callable
 from src.orchestration.state import ResearchState
 
 
+def route_after_scope_gate(state: ResearchState) -> str:
+    """Stop the workflow when the scope gate refused the query."""
+    if state.get("scope_refusal"):
+        return "refused"
+    return "in_scope"
+
+
 def route_after_agent_selection(state: ResearchState) -> str:
     """Decide whether to use provided URLs or generate queries."""
     if state.get("source_urls") and len(state["source_urls"]) > 0:

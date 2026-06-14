@@ -102,7 +102,7 @@ EXPOSE 8000
 # Health check to monitor container status
 # Checks if the FastAPI application is responding
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/').read()" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()" || exit 1
 
 # Default command to run the application
 # Using uvicorn directly is more efficient than python main.py

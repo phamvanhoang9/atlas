@@ -1,6 +1,5 @@
 # docker-compose.yml (Development Version)
-
-version: '3.8'
+# For production use docker-compose.prod.yml.
 
 services:
   atlas:
@@ -8,44 +7,38 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: atlas-dev
-    
-    # Environment variables from .env file
+
+    # All API keys and settings come from .env (copy .env.example -> .env)
     env_file:
       - .env
-    
-    # Additional dev environment variables
+
     environment:
-      - DEBUG=True
-      - FLASK_ENV=development
       - PYTHONUNBUFFERED=1
-    
-    # Expose on all interfaces for easy access
+      - HISTORY_DB_PATH=/app/.atlas_data/history.sqlite
+      - ATLAS_CACHE_DB=/app/.atlas_cache/cache.sqlite
+
+    # Expose on all interfaces for easy LAN access during development
     ports:
       - "8000:8000"
-    
-    # Mount source code for hot reload
+
+    # Persist generated reports, history DB, and caches across restarts
     volumes:
       - ./outputs:/app/outputs
-      - ./history.json:/app/history.json  # Persist research history
-      - ./app:/app/app              # Hot reload your app code
-      - ./requirements.txt:/app/requirements.txt
-    
-    # Simple network
+      - ./.atlas_data:/app/.atlas_data
+      - ./.atlas_cache:/app/.atlas_cache
+
     networks:
       - atlas-network
-    
-    # Restart only on failure (not always)
+
     restart: on-failure
-    
-    # Basic health check (less strict)
+
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/').read()"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
       interval: 60s
       timeout: 10s
       retries: 3
       start_period: 40s
-    
-    # Simple logging (no rotation needed in dev)
+
     logging:
       driver: "json-file"
 

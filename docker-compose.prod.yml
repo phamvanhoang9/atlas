@@ -27,6 +27,15 @@ services:
       - EMBEDDING_CACHE_TTL_SECONDS=2592000
       - ENABLE_CROSS_ENCODER_RERANKING=true
       - CROSS_ENCODER_MODEL=${CROSS_ENCODER_MODEL:-cross-encoder/ms-marco-MiniLM-L-12-v2}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8000,http://127.0.0.1:8000}
+      # Daily automation email delivery (mock mode when SMTP settings are absent)
+      - EMAIL_MODE=${EMAIL_MODE:-mock}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+      - SMTP_STARTTLS=${SMTP_STARTTLS:-true}
     
     # Expose on localhost only for security
     ports:
@@ -54,7 +63,7 @@ services:
     
     # Health monitoring
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/').read()"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
       interval: 30s
       timeout: 10s
       retries: 3

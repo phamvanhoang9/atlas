@@ -90,13 +90,13 @@ def extract_urls_from_task(task: str) -> tuple[str, List[str]]:
 
     if not cleaned_task or len(cleaned_task) < 10:
         if any('arxiv.org' in url for url in urls):
-            cleaned_task = "Phân tích bài báo từ arXiv"
+            cleaned_task = "Analyze the arXiv paper"
         elif any('.pdf' in url.lower() for url in urls):
-            cleaned_task = "Phân tích tài liệu PDF"
+            cleaned_task = "Analyze the PDF document"
         elif any('github.com' in url for url in urls):
-            cleaned_task = "Phân tích repository GitHub"
+            cleaned_task = "Analyze the GitHub repository"
         else:
-            cleaned_task = "Phân tích nguồn tài liệu được cung cấp"
+            cleaned_task = "Analyze the provided sources"
 
     cleaned_task = ' '.join(cleaned_task.split()).strip(',-:;')
     return cleaned_task, urls
@@ -158,13 +158,13 @@ async def run_agent(
     if source_urls:
         await websocket.send_json({
             "type": "logs",
-            "output": f"🔗 Phát hiện {len(source_urls)} URL(s), sẽ phân tích trực tiếp:\n",
+            "output": f"Detected {len(source_urls)} URL(s); they will be analyzed directly:\n",
         })
         for url in source_urls:
-            await websocket.send_json({"type": "logs", "output": f"  📄 {url}\n"})
+            await websocket.send_json({"type": "logs", "output": f"  - {url}\n"})
         await websocket.send_json({
             "type": "logs",
-            "output": f"📝 Nhiệm vụ: {cleaned_task}\n\n",
+            "output": f"Task: {cleaned_task}\n\n",
         })
 
     wrapped_websocket = _WebsocketWrapper(websocket, manager, websocket)
@@ -179,7 +179,7 @@ async def run_agent(
     report = await researcher.run()
 
     end_time = datetime.datetime.now()
-    await websocket.send_json({"type": "logs", "output": f"\nTổng thời gian xử lý: {end_time - start_time}\n"})
+    await websocket.send_json({"type": "logs", "output": f"\nTotal processing time: {end_time - start_time}\n"})
     logger.info(
         "Agent run complete mode=%s report_chars=%s duration_seconds=%.2f",
         report_type,

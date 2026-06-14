@@ -147,14 +147,18 @@ class Config:
     def apply_mode_config(self, report_type: str) -> None:
         """
         Apply mode-specific configuration overrides based on report type
-        
+
         Args:
-            report_type: The report type (mode) to configure for
+            report_type: The report type (mode) to configure for. Canonical ids
+                and legacy aliases are both accepted (see src.modes.registry).
         """
-        if report_type in self.mode_configs:
-            mode_config = self.mode_configs[report_type]
-            logger.info(f"Applying '{report_type}' mode configuration")
-            
+        from src.modes import get_mode_spec, is_known_mode
+
+        if is_known_mode(report_type):
+            spec = get_mode_spec(report_type)
+            mode_config = self.mode_configs[spec.id]
+            logger.info(f"Applying '{spec.id}' mode configuration (requested: '{report_type}')")
+
             # Actually apply the configuration values
             for key, value in mode_config.items():
                 old_value = getattr(self, key, None)
@@ -162,14 +166,7 @@ class Config:
                 if old_value != value:
                     logger.info(f"  config override: {key}: {old_value} → {value}")
             self.validate()
-
-            # Print mode priority summary
-            mode_priorities = {
-                'hỏi đáp': 'PRIORITY: Speed > Accuracy > Conciseness',
-                'đề xuất bài báo': 'PRIORITY: Depth > Accuracy > Thoroughness',
-                'phân tích': 'PRIORITY: Depth > Accuracy > Insights > Structure'
-            }
-            logger.info(mode_priorities.get(report_type, ''))
+            logger.info(spec.priority_note)
         else:
             logger.warning(f"No mode configuration found for '{report_type}', using defaults")
         

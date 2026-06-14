@@ -1,546 +1,481 @@
-const Atlas = (() => {
-    let intelligentQuestions = null;  // Store intelligent questions from the server
-    let currentSuggestedQuestions = [];  // Track current suggested questions
-    const debugLog = () => {};
-    
-    const init = () => {
-      debugLog("Atlas initialized");
-      
-      // Add form submit event listener
-      const form = document.getElementById("researchForm");
-      debugLog("Form element:", form);
-      
-      if (form) {
-        form.addEventListener("submit", (e) => {
-          debugLog("Form submitted, preventing default");
-          e.preventDefault();
-          e.stopPropagation();
-          startResearch();
-          return false;
-        });
-      } else {
-        console.error("Form not found!");
-      }
-      
-      const copyBtn = document.getElementById("copyToClipboard");
-      if (copyBtn) {
-        copyBtn.addEventListener("click", copyToClipboard);
-      }
-      
-      // Add mode selector change handlers
-      const modeSelector = document.getElementById("report_type");
-      if (modeSelector) {
-        modeSelector.addEventListener("change", () => updateModeDescription("modeDescription", "report_type"));
-        updateModeDescription("modeDescription", "report_type");
-      }
-      
-      updateState("initial");
-    }
+/**
+ * ATLAS app shell + research view.
+ *
+ * Owns: view routing (Research / Automation / History), the research
+ * WebSocket flow, report streaming, the sources panel, refusals, and
+ * follow-up questions. History and automation views live in their own
+ * files and register through window.AtlasViews.
+ */
 
-    const storeSuggestedQuestions = (questions) => {
-      debugLog("Storing intelligent questions:", questions);
-      intelligentQuestions = questions;
-      currentSuggestedQuestions = questions;  // Store for history
-      
-      // Visual debug
-      const container = document.getElementById("suggestedQuestions");
-      if (container) {
-        container.setAttribute('data-debug', `Received ${questions?.length || 0} questions`);
-      }
-            // Immediately update the UI if questions section is already visible
-      const thinkSection = document.getElementById("thinkSection");
-      if (thinkSection && thinkSection.style.display === "block") {
-        debugLog("Think section is visible, updating questions now");
-        generateSuggestedQuestions(false); // false = don't wait, render immediately
-      } else {
-        debugLog("Think section not visible yet, will update later. Display:", thinkSection?.style.display);
-      }
-      
-      // Update history with suggested questions
-      updateHistoryWithQuestions(questions);
-    };
-    
-    const updateHistoryWithQuestions = async (questions) => {
-      // Update the current history entry with suggested questions
-      if (window.HistoryUI) {
-        const historyId = HistoryUI.getCurrentHistoryId();
-        if (historyId) {
-          try {
-            // Note: The server already stores suggested questions from websocket
-            // This is just for logging/confirmation
-            debugLog("Questions stored in history:", historyId);
-          } catch (error) {
-            console.error("Error updating history with questions:", error);
-          }
-        }
-      }
-    };
-    
-    const startResearch = () => {
-      // Clear previous content
-      intelligentQuestions = null;
-      currentSuggestedQuestions = [];
-      document.getElementById("output").innerHTML = "";
-      document.getElementById("reportContainer").innerHTML = "";
-      document.getElementById("suggestedQuestions").innerHTML = "";
-      
-      // Show agent section, hide others
-      document.getElementById("agentSection").style.display = "block";
-      document.getElementById("readSection").style.display = "none";
-      document.getElementById("thinkSection").style.display = "none";
-      setResearchFormBusy(true);
-      
-      // Get current mode
-      const mode = document.querySelector('select[name="report_type"]').value;
-      
-      updateState("in_progress")
-      
-      // Mode-specific messages
-      const messages = {
-        'hỏi đáp': "⚡ Đang tìm câu trả lời nhanh...",
-        'phân tích': "🔬 Đang phân tích sâu các nghiên cứu...",
-        'đề xuất bài báo': "📚 Đang tìm kiếm các bài báo phù hợp..."
-      };
-  
-      addAgentResponse({ output: messages[mode] || "🤔 Đang suy nghĩ về yêu cầu nghiên cứu..." });
-  
-      listenToSockEvents();
-    };
-  
-    const listenToSockEvents = () => {
-      const { protocol, host, pathname } = window.location;
-      const authToken = window.localStorage.getItem("atlas_auth_token");
-      const authQuery = authToken ? `?token=${encodeURIComponent(authToken)}` : "";
-      const ws_uri = `${protocol === 'https:' ? 'wss:' : 'ws:'}//${host}${pathname}ws${authQuery}`; // wss:// for encrypted connections, ws:// for unencripted connections
-      const converter = new showdown.Converter(); // convert Markdown to HTML
-      const socket = new WebSocket(ws_uri); // enables two-way communication between a client and a server
-  
-      socket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        debugLog("Received message:", data.type, data);
-        
-        if (data.type === 'logs') {
-          addAgentResponse(data);
-        } else if (data.type === 'report') {
-          writeReport(data, converter);
-        } else if (data.type === 'suggested_questions') {
-          debugLog("Received intelligent questions:", data.output);
-          storeSuggestedQuestions(data.output);
-        } else if (data.type === 'quality_check') {
-          renderQualityCheck(data.output);
-        } else if (data.type === 'history_id') {
-          // Store history ID for this session
-          if (window.HistoryUI) {
-            HistoryUI.setCurrentHistoryId(data.output);
-            debugLog("History ID stored:", data.output);
-          }
-        } else if (data.type === 'path') {
-          updateState("finished")
-          updateDownloadLink(data);
+/* ------------------------------------------------- shared helpers */
 
-        }
-      };
-  
-      socket.onopen = (event) => {
-        const task = document.querySelector('input[name="task"]').value;
-        const report_type = document.querySelector('select[name="report_type"]').value;
-        const agent = document.querySelector('input[name="agent"]:checked').value;
-  
-        const requestData = {
-          task: task,
-          report_type: report_type,
-          agent: agent,
-        };
-  
-        socket.send(`start ${JSON.stringify(requestData)}`);
-      };
+const AtlasShared = (() => {
+    const authToken = () => window.localStorage.getItem("atlas_auth_token");
+
+    const authHeaders = () => {
+        const token = authToken();
+        return token ? { "Authorization": `Bearer ${token}` } : {};
     };
-  
-    const addAgentResponse = (data) => {
-      const output = document.getElementById("output");
-      const response = document.createElement("div");
-      response.className = "agent_response";
-      if (data.html === true) {
-        response.innerHTML = data.output;
-      } else {
-        response.textContent = data.output ?? "";
-      }
-      output.appendChild(response);
-      output.scrollTop = output.scrollHeight;
-      output.style.display = "block";
-      updateScroll();
+
+    const withAuthToken = (url) => {
+        const token = authToken();
+        if (!token) return url;
+        const separator = url.includes("?") ? "&" : "?";
+        return `${url}${separator}token=${encodeURIComponent(token)}`;
     };
 
     const escapeHtml = (value) => {
-      const div = document.createElement("div");
-      div.textContent = String(value ?? "");
-      return div.innerHTML;
+        const div = document.createElement("div");
+        div.textContent = String(value ?? "");
+        return div.innerHTML;
     };
+
+    const timeAgo = (isoString) => {
+        const date = new Date(isoString);
+        if (Number.isNaN(date.getTime())) return "";
+        const diffMs = Date.now() - date.getTime();
+        const mins = Math.floor(diffMs / 60000);
+        if (mins < 1) return "just now";
+        if (mins < 60) return `${mins} min ago`;
+        const hours = Math.floor(mins / 60);
+        if (hours < 24) return `${hours} h ago`;
+        const days = Math.floor(hours / 24);
+        if (days < 7) return `${days} d ago`;
+        return date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    };
+
+    const converter = () => new showdown.Converter({ tables: true, openLinksInNewWindow: true });
+
+    return { authHeaders, withAuthToken, escapeHtml, timeAgo, converter };
+})();
+window.AtlasShared = AtlasShared;
+
+/* --------------------------------------------------- view router */
+
+const AtlasRouter = (() => {
+    const initializers = {};   // view name -> { init, initialized }
+
+    const register = (name, initFn) => {
+        initializers[name] = { init: initFn, initialized: false };
+    };
+
+    const show = (name) => {
+        document.querySelectorAll(".nav-tab").forEach((tab) => {
+            tab.classList.toggle("active", tab.dataset.view === name);
+        });
+        document.querySelectorAll(".view").forEach((view) => {
+            view.classList.toggle("active", view.id === `view-${name}`);
+        });
+        const entry = initializers[name];
+        if (entry && !entry.initialized) {
+            entry.initialized = true;
+            entry.init();
+        } else if (entry && entry.refresh) {
+            entry.refresh();
+        }
+        window.scrollTo(0, 0);
+    };
+
+    const init = () => {
+        document.querySelectorAll(".nav-tab").forEach((tab) => {
+            tab.addEventListener("click", () => show(tab.dataset.view));
+        });
+    };
+
+    return { register, show, init };
+})();
+window.AtlasViews = AtlasRouter;
+
+/* -------------------------------------------------- research view */
+
+const Atlas = (() => {
+    const MODE_LABELS = {
+        quick: "Quick Answer",
+        research: "Research",
+        deep: "Deep Research",
+        // Legacy ids kept readable for stored history entries.
+        "hỏi đáp": "Quick Answer",
+        "đề xuất bài báo": "Research",
+        "phân tích": "Deep Research",
+    };
+    const MODE_CLASSES = {
+        quick: "quick", research: "research", deep: "deep",
+        "hỏi đáp": "quick", "đề xuất bài báo": "research", "phân tích": "deep",
+    };
+
+    const converter = AtlasShared.converter();
+
+    let reportMarkdown = "";
+    let renderQueued = false;
+    let running = false;
+    let finished = false;
+    let refused = false;
+    let socket = null;
+
+    const el = (id) => document.getElementById(id);
+
+    /* ---------- progress */
+
+    const STAGE_RULES = [
+        [/^Researching/i, "Planning research…"],
+        [/Selected agent/i, "Planning research…"],
+        [/report/i, "Writing the report…"],
+        [/context/i, "Building context…"],
+        [/sources kept|quality score|low-quality/i, "Ranking sources by quality…"],
+        [/Scraping/i, "Reading sources…"],
+        [/^Searching|parallel search|^Found \d+ results|Added URL/i, "Searching the web…"],
+        [/quer(y|ies)/i, "Generating search queries…"],
+    ];
+
+    const stageFor = (line) => {
+        for (const [pattern, stage] of STAGE_RULES) {
+            if (pattern.test(line)) return stage;
+        }
+        return null;
+    };
+
+    const appendLog = (text) => {
+        const log = el("progressLog");
+        const line = String(text ?? "").trim();
+        if (!line) return;
+        log.textContent += (log.textContent ? "\n" : "") + line;
+        log.scrollTop = log.scrollHeight;
+        const stage = stageFor(line);
+        if (stage) el("progressStage").textContent = stage;
+    };
+
+    /* ---------- report rendering (chunk stream + replace) */
+
+    const renderReport = () => {
+        renderQueued = false;
+        el("reportContainer").innerHTML = converter.makeHtml(reportMarkdown);
+    };
+
+    const queueRender = () => {
+        if (!renderQueued) {
+            renderQueued = true;
+            requestAnimationFrame(renderReport);
+        }
+    };
+
+    const handleReportMessage = (data) => {
+        if (data.replace) {
+            reportMarkdown = data.output ?? "";
+        } else {
+            reportMarkdown += data.output ?? "";
+        }
+        // A refused query renders only the refusal card, not a report card.
+        if (refused) return;
+        el("resultArea").classList.remove("is-hidden");
+        queueRender();
+    };
+
+    /* ---------- sources panel */
+
+    const renderSources = (sources) => {
+        const list = el("sourcesList");
+        list.innerHTML = "";
+        if (!Array.isArray(sources) || sources.length === 0) {
+            list.innerHTML = '<p class="empty-note">No ranked sources for this run.</p>';
+            el("sourceCount").textContent = "";
+            return;
+        }
+        el("sourceCount").textContent = String(sources.length);
+        sources.forEach((source) => {
+            const item = document.createElement("div");
+            item.className = "source-item";
+
+            const link = document.createElement("a");
+            link.className = "source-title";
+            link.href = source.url || "#";
+            link.target = "_blank";
+            link.rel = "noopener";
+            link.textContent = source.title || source.url || "Untitled source";
+
+            const meta = document.createElement("div");
+            meta.className = "source-meta";
+
+            const chip = document.createElement("span");
+            chip.className = `cat-chip ${source.category || "uncategorized"}`;
+            chip.textContent = source.category_label || "Web source";
+
+            const score = document.createElement("span");
+            score.className = "source-score";
+            score.textContent = `${source.score ?? "?"}/100`;
+
+            meta.appendChild(chip);
+            meta.appendChild(score);
+            item.appendChild(link);
+            item.appendChild(meta);
+            list.appendChild(item);
+        });
+    };
+
+    /* ---------- suggested questions */
+
+    const renderSuggestedQuestions = (questions) => {
+        const container = el("suggestedQuestions");
+        container.innerHTML = "";
+        if (!Array.isArray(questions) || questions.length === 0) {
+            container.innerHTML = '<p class="empty-note">No follow-up questions for this run.</p>';
+            return;
+        }
+        questions.forEach((question) => {
+            const div = document.createElement("div");
+            div.className = "suggested-question";
+            div.textContent = question;
+            div.addEventListener("click", () => {
+                el("task").value = question;
+                AtlasRouter.show("research");
+                el("task").focus();
+                window.scrollTo({ top: 0, behavior: "smooth" });
+            });
+            container.appendChild(div);
+        });
+    };
+
+    /* ---------- quality / evaluation notes */
 
     const renderQualityCheck = (payload) => {
-      if (!payload || typeof payload !== "object") {
-        return;
-      }
-
-      const status = payload.passed ? "Đạt ngưỡng" : "Cần xem lại";
-      const warnings = Array.isArray(payload.warnings) ? payload.warnings : [];
-      const warningHtml = warnings.length
-        ? `<ul>${warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul>`
-        : "<p>Không có cảnh báo.</p>";
-
-      addAgentResponse({
-        html: true,
-        output: `
-          <div class="quality-check">
-            <strong>Kiểm tra chất lượng: ${escapeHtml(status)}</strong>
-            <div>Điểm: ${escapeHtml(payload.score)} | URL trong báo cáo: ${escapeHtml(payload.report_url_count)} | URL hợp lệ: ${escapeHtml(payload.grounded_url_count)}/${escapeHtml(payload.context_url_count)}</div>
-            ${warningHtml}
-          </div>
-        `
-      });
-    };
-  
-    const writeReport = (data, converter) => {
-      const reportContainer = document.getElementById("reportContainer");
-      const markdownOutput = converter.makeHtml(data.output);
-      reportContainer.innerHTML = markdownOutput;
-      updateScroll();
-    };
-  
-    const updateDownloadLink = (data) => {
-      const path = data.output;
-      const downloadLink = document.getElementById("downloadLink");
-      const downloadMeta = document.getElementById("downloadMeta");
-      downloadLink.setAttribute("href", path);
-      downloadLink.setAttribute("download", path.split("/").pop() || "atlas-report.pdf");
-      if (downloadMeta) {
-        downloadMeta.textContent = "PDF đã sẵn sàng để tải xuống.";
-      }
-    };
-  
-    const updateScroll = () => {
-      window.scrollTo(0, document.body.scrollHeight);
-    };
-  
-    const copyToClipboard = () => {
-      const reportText = document.getElementById('reportContainer').innerText;
-      const status = document.getElementById("status");
-      if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(reportText).then(() => {
-          if (status) status.textContent = "Đã sao chép báo cáo.";
-        }).catch(() => fallbackCopyToClipboard(reportText, status));
-        return;
-      }
-      fallbackCopyToClipboard(reportText, status);
+        if (!payload || typeof payload !== "object") return;
+        const note = el("qualityNote");
+        const verdict = payload.passed ? "passed" : "needs review";
+        note.textContent =
+            `Grounding check ${verdict} — score ${payload.score}, ` +
+            `${payload.grounded_url_count}/${payload.context_url_count} reference URLs verified against retrieved sources.`;
+        note.classList.remove("is-hidden");
     };
 
-    const fallbackCopyToClipboard = (reportText, status) => {
-      const textarea = document.createElement('textarea');
-      textarea.id = 'temp_element';
-      textarea.style.height = 0;
-      textarea.value = reportText;
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-      if (status) status.textContent = "Đã sao chép báo cáo.";
+    const renderEvaluation = (payload) => {
+        if (!payload || typeof payload !== "object" || payload.error) return;
+        const note = el("qualityNote");
+        const existing = note.classList.contains("is-hidden") ? "" : note.textContent + " · ";
+        note.textContent = `${existing}Evaluation: overall ${Number(payload.overall_score).toFixed(2)} (${payload.label}).`;
+        note.classList.remove("is-hidden");
     };
 
-    const updateState = (state) => {
-      var status = "";
-      switch (state) {
-        case "in_progress":
-          status = "Đang nghiên cứu..."
-          setResearchFormBusy(true);
-          setReportActionsStatus("disabled");
-          break;
-        case "finished":
-          status = "Nghiên cứu hoàn thành!"
-          setResearchFormBusy(false, true);
-          setReportActionsStatus("enabled");
-          // Show READ and THINK while keeping the main form as the single input surface.
-          showReadThinkAskFlow();
-          break;
-        case "error":
-          status = "Nghiên cứu thất bại!"
-          setResearchFormBusy(false);
-          setReportActionsStatus("disabled");
-          break;
-        case "initial":
-          status = ""
-          setResearchFormBusy(false);
-          setReportActionsStatus("hidden");
-          break;
-        default:
-          setReportActionsStatus("disabled");
-      }
-      const statusElement = document.getElementById("status");
-      statusElement.textContent = status;
-      if (statusElement.textContent == "") {
-        statusElement.style.display = "none";
-      } else {
-        statusElement.style.display = "block";
-      }
-    }
-    
-    const showReadThinkAskFlow = () => {
-      // Get current mode
-      const mode = document.querySelector('select[name="report_type"]').value;
-      
-      // Update mode badge
-      const modeBadge = document.getElementById("modeBadge");
-      const badgeInfo = {
-        'hỏi đáp': { text: '⚡ Hỏi đáp', class: 'qa' },
-        'phân tích': { text: '📊 Phân tích', class: 'analysis' },
-        'đề xuất bài báo': { text: '📚 Nghiên cứu', class: 'research' }
-      };
-      
-      if (badgeInfo[mode]) {
-        modeBadge.textContent = badgeInfo[mode].text;
-        modeBadge.className = `mode-badge ${badgeInfo[mode].class}`;
-      }
-      
-      // Hide agent section
-      document.getElementById("agentSection").style.display = "none";
-      
-      // Show READ section immediately
-      document.getElementById("readSection").style.display = "block";
-      updateScroll();
-      
-      // Mode-specific flows
-      if (mode === 'hỏi đáp') {
-        // Q&A mode: Fast flow - minimal THINK, quick to ASK NEXT
-        setTimeout(() => {
-          document.getElementById("thinkSection").style.display = "block";
-          document.querySelector("#thinkSection .section-subtitle").textContent = "Câu hỏi liên quan để khám phá thêm";
-          generateSuggestedQuestions(true); // true = wait for intelligent questions
-          // Simplified takeaways for Q&A
-          document.getElementById("keyTakeaways").innerHTML = `
-            <li>Đọc lại câu trả lời để nắm rõ nội dung</li>
-            <li>Click vào câu hỏi gợi ý bên cạnh</li>
-            <li>Hoặc đặt câu hỏi mới của bạn</li>
-          `;
-          updateScroll();
-        }, 300);
-        
-      } else if (mode === 'phân tích') {
-        // Analysis mode: Detailed THINK section
-        setTimeout(() => {
-          document.getElementById("thinkSection").style.display = "block";
-          document.querySelector("#thinkSection .section-subtitle").textContent = "Khám phá các khía cạnh liên quan và hướng nghiên cứu tiếp theo";
-          generateSuggestedQuestions(true); // true = wait for intelligent questions
-          document.getElementById("keyTakeaways").innerHTML = `
-            <li>Xem xét các phương pháp được phân tích</li>
-            <li>So sánh ưu nhược điểm của từng approach</li>
-            <li>Nhận diện xu hướng và gaps nghiên cứu</li>
-            <li>Đánh giá khả năng áp dụng thực tế</li>
-          `;
-          updateScroll();
-        }, 500);
-        
-      } else {
-        // Research mode: Full flow
-        setTimeout(() => {
-          document.getElementById("thinkSection").style.display = "block";
-          document.querySelector("#thinkSection .section-subtitle").textContent = "Khám phá các khía cạnh liên quan và hướng nghiên cứu tiếp theo";
-          generateSuggestedQuestions(true); // true = wait for intelligent questions
-          document.getElementById("keyTakeaways").innerHTML = `
-            <li>Xem xét các phương pháp được đề xuất</li>
-            <li>So sánh với các nghiên cứu hiện có</li>
-            <li>Tìm kiếm khoảng trống nghiên cứu</li>
-            <li>Đọc papers có code để thực hành</li>
-          `;
-          updateScroll();
-        }, 500);
-        
-      }
-    }
-    
-    const generateSuggestedQuestions = (waitForIntelligent = false) => {
-      debugLog("generateSuggestedQuestions called, waitForIntelligent:", waitForIntelligent, "intelligentQuestions:", intelligentQuestions);
-      const container = document.getElementById("suggestedQuestions");
-      
-      // Debug info
-      if (intelligentQuestions) {
-        debugLog("Type:", typeof intelligentQuestions, "IsArray:", Array.isArray(intelligentQuestions), "Length:", intelligentQuestions?.length);
-      }
-      
-      // Use intelligent questions from the server if available
-      if (intelligentQuestions && Array.isArray(intelligentQuestions) && intelligentQuestions.length > 0) {
-        debugLog("Using intelligent questions from server:", intelligentQuestions);
-        container.innerHTML = '';
-        intelligentQuestions.forEach((q, index) => {
-          debugLog(`Question ${index + 1}:`, q);
-          const div = document.createElement('div');
-          div.className = 'suggested-question';
-          div.textContent = q;
-          div.onclick = () => {
-            const taskInput = document.getElementById('task');
-            taskInput.value = q;
-            taskInput.focus();
-            document.getElementById('form').scrollIntoView({ behavior: 'smooth', block: 'center' });
-          };
-          container.appendChild(div);
-        });
-        debugLog("Rendered", intelligentQuestions.length, "intelligent questions");
-        return;
-      }
-      
-      // If we should wait for intelligent questions, show loading state
-      if (waitForIntelligent) {
-        debugLog("Waiting for intelligent questions from server...");
-        const debugInfo = intelligentQuestions ? ` (Already have: ${intelligentQuestions.length})` : '';
-        container.innerHTML = '';
-        const loadingQuestion = document.createElement('div');
-        loadingQuestion.className = 'suggested-question suggested-question-loading';
-        loadingQuestion.textContent = `💭 Đang tạo câu hỏi thông minh dựa trên kết quả nghiên cứu...${debugInfo}`;
-        container.appendChild(loadingQuestion);
-        
-        // Wait up to 8 seconds for intelligent questions from the server
-        const maxWaitTime = 8000;
-        const startTime = Date.now();
-        let checkCount = 0;
-        
-        const checkInterval = setInterval(() => {
-          checkCount++;
-          debugLog(`Check #${checkCount}: intelligentQuestions =`, intelligentQuestions);
-          
-          if (intelligentQuestions && Array.isArray(intelligentQuestions) && intelligentQuestions.length > 0) {
-            debugLog("Intelligent questions received! Rendering...");
-            clearInterval(checkInterval);
-            generateSuggestedQuestions(false); // Render the questions
-          } else if (Date.now() - startTime > maxWaitTime) {
-            debugLog("Timeout waiting for intelligent questions, using fallback");
-            clearInterval(checkInterval);
-            // Timeout: fall back to template questions
-            intelligentQuestions = null;
-            generateSuggestedQuestions(false);
-          }
-        }, 200);
-        
-        return;
-      }
-      
-      // Fallback: template-based questions
-      debugLog("Using fallback template-based questions");
-      container.innerHTML = '';
-      const taskInput = document.querySelector('input[name="task"]').value;
-      const mode = document.querySelector('select[name="report_type"]').value;
-      
-      let questions = [];
-      if (mode === 'hỏi đáp') {
-        questions = [
-          `${taskInput} hoạt động như thế nào?`,
-          `Ưu nhược điểm của ${taskInput}?`,
-          `Ví dụ thực tế về ${taskInput}?`,
-          `So sánh ${taskInput} với các phương pháp khác?`
-        ];
-      } else if (mode === 'phân tích') {
-        questions = [
-          `So sánh chi tiết các phương pháp trong ${taskInput}`,
-          `Xu hướng mới nhất về ${taskInput}?`,
-          `Thách thức chính trong ${taskInput}?`,
-          `State-of-the-art methods cho ${taskInput}?`
-        ];
-      } else {
-        questions = [
-          `Tìm papers về ${taskInput} có code implementation`,
-          `Survey papers về ${taskInput}?`,
-          `Benchmark datasets cho ${taskInput}?`,
-          `Tutorial và resources học ${taskInput}?`
-        ];
-      }
-      
-      questions.forEach(q => {
-        const div = document.createElement('div');
-        div.className = 'suggested-question';
-        div.textContent = q;
-        div.onclick = () => {
-          const taskInput = document.getElementById('task');
-          taskInput.value = q;
-          taskInput.focus();
-          document.getElementById('form').scrollIntoView({ behavior: 'smooth', block: 'center' });
-        };
-        container.appendChild(div);
-      });
-    }
-    
-    const updateModeDescription = (descriptionId, selectorId) => {
-      const mode = document.getElementById(selectorId).value;
-      const description = document.getElementById(descriptionId);
-      
-      const descriptions = {
-        'hỏi đáp': '💬 Nhận câu trả lời nhanh, ngắn gọn và chính xác cho câu hỏi của bạn',
-        'phân tích': '📊 Phân tích sâu, so sánh các phương pháp, và đánh giá xu hướng nghiên cứu',
-        'đề xuất bài báo': '📚 Danh sách bài báo được xếp hạng theo độ liên quan và chất lượng'
-      };
-      
-      if (description) {
-        description.textContent = descriptions[mode] || '';
-      }
-    }
+    /* ---------- refusal */
 
-    /**
-     * Shows or hides the download and copy buttons.
-     */
-    const setReportActionsStatus = (status) => {
-      const reportActions = document.getElementById("reportActions");
-      if (!reportActions) {
-        return;
-      }
+    const showRefusal = (markdown) => {
+        refused = true;
+        const card = el("refusalCard");
+        el("refusalBody").innerHTML = converter.makeHtml(markdown ?? "");
+        card.classList.remove("is-hidden");
+        el("progressCard").classList.add("is-hidden");
+        el("resultArea").classList.add("is-hidden");
+    };
 
-      if (status == "enabled") {
-        reportActions.querySelectorAll("a, button").forEach((link) => {
-          link.classList.remove("disabled");
-          link.removeAttribute("disabled");
-          link.removeAttribute('onclick');
-          reportActions.style.display = "block";
-        });
-      } else {
-        reportActions.querySelectorAll("a, button").forEach((link) => {
-          link.classList.add("disabled");
-          if (link.tagName === "BUTTON") {
-            link.setAttribute("disabled", "disabled");
-          } else {
-            link.setAttribute('onclick', "return false;");
-          }
-        });
-        if (status == "hidden") {
-          reportActions.style.display = "none";
+    /* ---------- run state */
+
+    const setFormBusy = (busy, completed = false) => {
+        const submit = el("submitResearch");
+        const label = el("taskLabel");
+        submit.disabled = busy;
+        if (busy) {
+            submit.textContent = "Running…";
+            label.textContent = "ATLAS is working on your question";
+        } else if (completed) {
+            submit.textContent = "Run again";
+            label.textContent = "What do you want to explore next?";
+        } else {
+            submit.textContent = "Run";
+            label.textContent = "Ask about AI research, models, tools, or papers";
         }
-      }
-    }
+    };
 
-    const setResearchFormBusy = (busy, completed = false) => {
-      const submitButton = document.getElementById("submitResearch");
-      const taskLabel = document.querySelector("label[for='task']");
-      const form = document.getElementById("researchForm");
-      if (!submitButton || !taskLabel || !form) {
-        return;
-      }
+    const showError = (message) => {
+        const card = el("errorCard");
+        card.textContent = message;
+        card.classList.remove("is-hidden");
+        el("progressSpinner").classList.add("done");
+        setFormBusy(false);
+        running = false;
+    };
 
-      submitButton.disabled = busy;
-      form.classList.toggle("research-form-complete", completed && !busy);
-      if (busy) {
-        submitButton.value = "Đang nghiên cứu...";
-        taskLabel.textContent = "ATLAS đang xử lý yêu cầu";
-      } else if (completed) {
-        submitButton.value = "Nghiên cứu tiếp";
-        taskLabel.textContent = "Bạn muốn khám phá gì tiếp theo?";
-      } else {
-        submitButton.value = "Nghiên cứu";
-        taskLabel.textContent = "Bạn muốn khám phá gì?";
-      }
-    }
+    const resetRunUI = () => {
+        reportMarkdown = "";
+        finished = false;
+        refused = false;
+        el("researchEmpty").classList.add("is-hidden");
+        el("errorCard").classList.add("is-hidden");
+        el("refusalCard").classList.add("is-hidden");
+        el("resultArea").classList.add("is-hidden");
+        el("reportContainer").innerHTML = "";
+        el("qualityNote").classList.add("is-hidden");
+        el("qualityNote").textContent = "";
+        el("status").textContent = "";
+        el("sourcesList").innerHTML = '<p class="empty-note">Sources appear here as they are found and ranked.</p>';
+        el("sourceCount").textContent = "";
+        el("suggestedQuestions").innerHTML = '<p class="empty-note">Generated after the report is ready.</p>';
+        el("progressLog").textContent = "";
+        el("progressStage").textContent = "Starting research…";
+        el("progressSpinner").classList.remove("done");
+        el("progressCard").classList.remove("is-hidden");
+        el("copyToClipboard").disabled = true;
+        const pdf = el("downloadLink");
+        pdf.classList.add("disabled");
+        pdf.href = "#";
+    };
+
+    const finishRun = () => {
+        finished = true;
+        running = false;
+        el("progressSpinner").classList.add("done");
+        el("progressStage").textContent = "Research complete";
+        if (!refused) {
+            el("status").textContent = "Report complete.";
+            el("copyToClipboard").disabled = false;
+        }
+        setFormBusy(false, true);
+        setTimeout(() => el("progressCard").classList.add("is-hidden"), 1200);
+    };
+
+    /* ---------- websocket */
+
+    const startResearch = () => {
+        if (running) return;
+        const task = el("task").value.trim();
+        if (!task) return;
+        const mode = document.querySelector('input[name="report_type"]:checked').value;
+
+        running = true;
+        resetRunUI();
+        setFormBusy(true);
+        setModeBadge(mode);
+
+        const { protocol, host } = window.location;
+        const token = window.localStorage.getItem("atlas_auth_token");
+        const authQuery = token ? `?token=${encodeURIComponent(token)}` : "";
+        const wsUri = `${protocol === "https:" ? "wss:" : "ws:"}//${host}/ws${authQuery}`;
+
+        socket = new WebSocket(wsUri);
+
+        socket.onopen = () => {
+            socket.send(`start ${JSON.stringify({ task, report_type: mode, agent: "Auto Agent" })}`);
+        };
+
+        socket.onmessage = (event) => {
+            let data;
+            try { data = JSON.parse(event.data); } catch { return; }
+
+            switch (data.type) {
+                case "logs": appendLog(data.output); break;
+                case "report": handleReportMessage(data); break;
+                case "sources": renderSources(data.output); break;
+                case "refusal": showRefusal(data.output); break;
+                case "suggested_questions": renderSuggestedQuestions(data.output); break;
+                case "quality_check": renderQualityCheck(data.output); break;
+                case "evaluation": renderEvaluation(data.output); break;
+                case "history_id":
+                    if (window.AtlasHistory) AtlasHistory.setCurrentHistoryId(data.output);
+                    break;
+                case "path": {
+                    const pdf = el("downloadLink");
+                    if (data.output) {
+                        pdf.href = data.output;
+                        pdf.classList.remove("disabled");
+                    }
+                    finishRun();
+                    break;
+                }
+                case "error": showError(data.output || "The server rejected the request."); break;
+                default: break;
+            }
+        };
+
+        socket.onclose = () => {
+            if (running && !finished) {
+                showError("Connection lost before the report finished. Check that the server is running, then try again.");
+            }
+        };
+
+        socket.onerror = () => {
+            if (running && !finished) {
+                showError("Could not reach the ATLAS server. Is it running on this host?");
+            }
+        };
+    };
+
+    /* ---------- shared render for stored history entries */
+
+    const setModeBadge = (mode, kind = "chat") => {
+        const badge = el("modeBadge");
+        if (kind === "daily_report") {
+            badge.textContent = "Daily Intelligence";
+            badge.className = "mode-badge daily";
+            return;
+        }
+        badge.textContent = MODE_LABELS[mode] || mode || "Report";
+        badge.className = `mode-badge ${MODE_CLASSES[mode] || "research"}`;
+    };
+
+    const displayStoredReport = (entry) => {
+        running = false;
+        resetRunUI();
+        el("progressCard").classList.add("is-hidden");
+        setFormBusy(false, true);
+
+        el("task").value = entry.kind === "daily_report" ? "" : (entry.query || "");
+        setModeBadge(entry.mode, entry.kind);
+
+        reportMarkdown = entry.report || "*This entry has no stored report.*";
+        renderReport();
+        el("resultArea").classList.remove("is-hidden");
+        el("status").textContent = `Loaded from history · ${AtlasShared.timeAgo(entry.timestamp)}`;
+        el("copyToClipboard").disabled = false;
+
+        const pdf = el("downloadLink");
+        if (entry.pdf_path) {
+            pdf.href = entry.pdf_path;
+            pdf.classList.remove("disabled");
+        }
+
+        renderSuggestedQuestions(entry.suggested_questions || []);
+        el("sourcesList").innerHTML =
+            '<p class="empty-note">Live source ranking is shown during a run. For stored reports, see the Sources section inside the report.</p>';
+        el("sourceCount").textContent = "";
+
+        AtlasRouter.show("research");
+    };
+
+    /* ---------- clipboard */
+
+    const copyToClipboard = () => {
+        const text = el("reportContainer").innerText;
+        const done = () => { el("status").textContent = "Report copied to clipboard."; };
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+            return;
+        }
+        fallbackCopy(text, done);
+    };
+
+    const fallbackCopy = (text, done) => {
+        const textarea = document.createElement("textarea");
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+        done();
+    };
+
+    /* ---------- init */
+
+    const init = () => {
+        AtlasRouter.init();
+        document.getElementById("researchForm").addEventListener("submit", (event) => {
+            event.preventDefault();
+            startResearch();
+        });
+        document.getElementById("copyToClipboard").addEventListener("click", copyToClipboard);
+    };
 
     document.addEventListener("DOMContentLoaded", init);
-    return {
-      startResearch,
-      copyToClipboard,
-      setReportActionsStatus,
-      storeSuggestedQuestions,
-      updateModeDescription,
-    };
-  })();
+
+    return { startResearch, displayStoredReport, setModeBadge };
+})();
 
 window.Atlas = Atlas;

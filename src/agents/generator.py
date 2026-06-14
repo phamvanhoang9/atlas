@@ -10,12 +10,12 @@ import traceback
 from typing import Any
 
 from src.llm.completion import create_chat_completion
+from src.modes import normalize_mode
 from src.orchestration.state import ResearchState
 from src.prompts.functions import (
-    generate_paper_analysis_prompt,
     generate_suggested_questions_prompt,
-    generate_topic_analysis_prompt,
     get_report_by_type,
+    system_role_for_mode,
 )
 from src.quality import ReportValidator
 from src.transport.streaming import stream_output
@@ -23,15 +23,19 @@ from src.transport.streaming import stream_output
 logger = logging.getLogger(__name__)
 
 
-REFERENCE_HEADING = "## Nguồn tham khảo"
-REFERENCE_HEADING_RE = re.compile(r"(?im)^#{1,6}\s*Nguồn\s+tham\s+khảo\s*$")
+REFERENCE_HEADING = "## Sources"
+# Matches the canonical EN heading plus legacy headings still present in
+# stored reports and older prompt outputs.
+REFERENCE_HEADING_RE = re.compile(
+    r"(?im)^#{1,6}\s*(?:Sources|References|Nguồn\s+tham\s+khảo)\s*$"
+)
 ARXIV_ID_RE = re.compile(r"arxiv\.org/(?:abs|html|pdf)/([0-9]{4}\.[0-9]{4,5})(?:v\d+)?", re.IGNORECASE)
 
 
 def _extract_source_links(context: list[str]) -> list[tuple[str, str]]:
     """Extract (title, url) pairs from context, supporting both context formats.
 
-    build_mode_context format:  ### Nguồn N: <title> / URL: <url>
+    build_mode_context format:  ### Source N: <title> / URL: <url>  (legacy: ### Nguồn N:)
     ContextCompressor format:   Source: <url> / Title: <title>
     """
     sources: list[tuple[str, str]] = []
@@ -40,7 +44,7 @@ def _extract_source_links(context: list[str]) -> list[tuple[str, str]]:
 
     patterns = (
         re.compile(
-            r"(?ms)^###\s*Nguồn\s+\d+:\s*(?P<title>.+?)\nURL:\s*(?P<url>\S+)"
+            r"(?ms)^###\s*(?:Source|Nguồn)\s+\d+:\s*(?P<title>.+?)\nURL:\s*(?P<url>\S+)"
         ),
         re.compile(
             r"(?ms)^Source:\s*(?P<url>\S+)\s*\nTitle:\s*(?P<title>.*?)(?=\n(?:Source:|Content:)|\Z)"
@@ -58,6 +62,20 @@ def _extract_source_links(context: list[str]) -> list[tuple[str, str]]:
             sources.append((title, url))
             seen.add(url)
     return sources
+
+
+_SOURCE_CATEGORY_RE = re.compile(
+    r"(?m)^URL:\s*(?P<url>\S+)\s*\nCategory:\s*(?P<label>.+?)\s*$"
+)
+
+
+def _extract_source_categories(context: list[str]) -> dict[str, str]:
+    """Map source URL → quality category label parsed from context headers."""
+    categories: dict[str, str] = {}
+    for chunk in context:
+        for match in _SOURCE_CATEGORY_RE.finditer(chunk):
+            categories.setdefault(match.group("url").strip(), match.group("label").strip())
+    return categories
 
 
 def _split_references_section(report: str) -> tuple[str, str, str] | None:
@@ -165,14 +183,14 @@ def _fallback_title_from_url(url: str) -> str:
         return f"arXiv:{arxiv_match.group(1)}"
     host_match = re.search(r"https?://([^/]+)", url)
     if not host_match:
-        return "Tài liệu tham khảo"
+        return "Reference"
     host = host_match.group(1)
     path_match = re.search(r"https?://[^/]+(/[^?#]+)", url)
     if path_match:
         segment = path_match.group(1).rstrip("/").split("/")[-1]
         if segment and segment not in {"index.html", "index.htm", "index.php", "index"}:
-            return f"Tài liệu từ {host}: {segment}"
-    return f"Tài liệu từ {host}"
+            return f"Document from {host}: {segment}"
+    return f"Document from {host}"
 
 
 _NON_CITABLE_EXTENSIONS = {
@@ -226,10 +244,14 @@ def _is_clear_source_title(title: str) -> bool:
 def _merge_sources(context_sources: list[tuple[str, str]], report: str) -> list[tuple[str, str]]:
     """Use context URLs (authoritative) matched to LLM titles by URL, not by position."""
     # Build URL → LLM-title lookup so titles follow their actual URLs, not list order.
+    # References written without any URL can only be matched by their [N] number.
     url_to_ref_title: dict[str, str] = {}
-    for _, title, url in _extract_reference_section_source_map(report):
-        if url and url not in url_to_ref_title:
-            url_to_ref_title[url] = title
+    number_to_ref_title: dict[int, str] = {}
+    for number, title, url in _extract_reference_section_source_map(report):
+        if url:
+            url_to_ref_title.setdefault(url, title)
+        else:
+            number_to_ref_title.setdefault(number, title)
 
     merged: list[tuple[str, str]] = []
     seen_urls: set[str] = set()
@@ -241,7 +263,7 @@ def _merge_sources(context_sources: list[tuple[str, str]], report: str) -> list[
         if url in seen_urls:
             continue
 
-        reference_title = url_to_ref_title.get(url, "")
+        reference_title = url_to_ref_title.get(url) or number_to_ref_title.get(len(merged) + 1, "")
         if _is_clear_source_title(reference_title):
             title = reference_title
         elif _is_clear_source_title(context_title):
@@ -270,7 +292,7 @@ def _merge_sources(context_sources: list[tuple[str, str]], report: str) -> list[
 
 def _source_title_for_display(title: str, source_number: int) -> str:
     """Return a non-URL label for reference lists when a title is missing."""
-    return title if _is_clear_source_title(title) else f"Tài liệu tham khảo {source_number}"
+    return title if _is_clear_source_title(title) else f"Reference {source_number}"
 
 
 def _link_inline_citations(report: str, sources: list[tuple[str, str]]) -> str:
@@ -289,22 +311,28 @@ def _link_inline_citations(report: str, sources: list[tuple[str, str]]) -> str:
     return re.sub(r"(?<!\[)\[([0-9]+(?:\s*,\s*[0-9]+)*)\](?!\()", replace, report)
 
 
-def _rebuild_references_section(report: str, sources: list[tuple[str, str]]) -> str:
-    """Replace the LLM-generated ## Nguồn tham khảo block with the authoritative
+def _rebuild_references_section(
+    report: str,
+    sources: list[tuple[str, str]],
+    source_categories: dict[str, str] | None = None,
+) -> str:
+    """Replace the LLM-generated references block with the authoritative
     source list derived from context. Inline [N] markers in the body are re-mapped
     to the canonical numbering so they stay consistent.
 
-    If the LLM wrote no references section, one is appended.
+    If the LLM wrote no references section, one is appended. When a source's
+    quality category is known it is shown after the link.
     """
     if not sources:
         return report
+    source_categories = source_categories or {}
 
     references_section = _split_references_section(report)
     if references_section:
         body, marker, tail = references_section
     else:
-        body = report
-        marker = REFERENCE_HEADING
+        body = report.rstrip("\n")
+        marker = f"\n\n{REFERENCE_HEADING}"
         tail = ""
 
     body = _link_inline_citations(body, sources)
@@ -322,9 +350,13 @@ def _rebuild_references_section(report: str, sources: list[tuple[str, str]]) -> 
         else:
             display_titles.append(lbl)
 
+    def _category_suffix(url: str) -> str:
+        label = source_categories.get(url, "")
+        return f" — *{label}*" if label else ""
+
     ref_lines = "\n".join(
         f'- <span id="source-{n}" class="report-source-anchor"></span>[[{n}]](#source-{n}) '
-        f'[{lbl}]({url})'
+        f'[{lbl}]({url}){_category_suffix(url)}'
         for (n, (_, url)), lbl in zip(enumerate(capped, start=1), display_titles)
     )
     return f"{body}{marker}\n{ref_lines}{tail}"
@@ -338,7 +370,9 @@ def _ensure_report_structure(report: str, query: str, context: list[str]) -> str
 
     sources = _merge_sources(_extract_source_links(context), normalized)
     if sources:
-        normalized = _rebuild_references_section(normalized, sources)
+        normalized = _rebuild_references_section(
+            normalized, sources, _extract_source_categories(context)
+        )
 
     return normalized
 
@@ -352,8 +386,8 @@ async def generate_report_node(state: ResearchState) -> dict[str, Any]:
     ws = state.get("websocket")
     context_list = state.get("context", [])
     if not context_list or all(not c for c in context_list):
-        await stream_output("logs", "⚠️ Không có context để tạo báo cáo\n", ws)
-        error_msg = "Không thể tạo báo cáo do thiếu thông tin context."
+        await stream_output("logs", "No context available to generate a report\n", ws)
+        error_msg = "Cannot generate a report: no research context was collected. Try rephrasing the query or running a deeper mode."
         if ws:
             try:
                 await ws.send_json({"type": "report", "output": error_msg})
@@ -372,29 +406,16 @@ async def generate_report_node(state: ResearchState) -> dict[str, Any]:
         cfg.llm_model,
         cfg.llm_provider,
     )
-    await stream_output("logs", f"✍️ Đang viết {state['report_type']} cho: {state['query']}...", ws)
+    canonical_mode = normalize_mode(state.get("report_type"))
+    await stream_output("logs", f"Writing {canonical_mode} report for: {state['query']}...", ws)
 
     try:
         has_urls = bool(state.get("source_urls"))
-        is_analysis = state["report_type"] == "phân tích"
-
-        if is_analysis:
-            if has_urls:
-                generate_prompt = generate_paper_analysis_prompt
-                role = (
-                    "Bạn là AI researcher đang đọc và giải thích chi tiết bài báo khoa học. "
-                    "CHỈ sử dụng thông tin từ bài báo được cung cấp, KHÔNG dùng kiến thức training. "
-                    "Hướng dẫn người đọc hiểu và triển khai ý tưởng từ bài báo."
-                )
-            else:
-                generate_prompt = generate_topic_analysis_prompt
-                role = (
-                    "Bạn là AI research expert phân tích chuyên sâu một chủ đề nghiên cứu. "
-                    "TẬP TRUNG TUYỆT ĐỐI vào chủ đề được hỏi, KHÔNG lan man sang chủ đề khác. "
-                    "Tổng hợp insights từ nhiều papers, phân tích toàn diện và sâu sắc về chủ đề."
-                )
-        else:
-            generate_prompt = get_report_by_type(state["report_type"])
+        generate_prompt = get_report_by_type(state["report_type"], has_source_urls=has_urls)
+        if canonical_mode == "deep":
+            # Deep research uses its strict analyst role rather than the
+            # LLM-selected agent persona.
+            role = system_role_for_mode(state["report_type"], has_urls)
 
         report = await create_chat_completion(
             model=cfg.llm_model,
@@ -432,14 +453,14 @@ async def generate_report_node(state: ResearchState) -> dict[str, Any]:
         if ws:
             await stream_output("quality_check", quality.to_dict(), ws, log_to_console=False)
             msg = (
-                "Đã kiểm tra chất lượng báo cáo: đạt ngưỡng.\n"
+                "Report quality check: passed.\n"
                 if quality.passed
-                else "Cần xem lại chất lượng báo cáo và trích dẫn.\n"
+                else "Report quality check flagged citation/grounding issues — review the sources.\n"
             )
             await stream_output("logs", msg, ws)
 
         if ws:
-            await stream_output("logs", "💭 Đang tạo câu hỏi gợi ý...\n", ws)
+            await stream_output("logs", "Generating follow-up questions...\n", ws)
             try:
                 await asyncio.wait_for(
                     _generate_suggested_questions(state["query"], report, state["report_type"], cfg, ws),
@@ -447,7 +468,7 @@ async def generate_report_node(state: ResearchState) -> dict[str, Any]:
                 )
             except asyncio.TimeoutError:
                 logger.warning("Suggested question generation timed out")
-                await stream_output("logs", "⚠️ Tạo câu hỏi gợi ý quá lâu, bỏ qua bước này.\n", ws)
+                await stream_output("logs", "Follow-up question generation timed out, skipping.\n", ws)
 
         return {**state, "report": report}
 
@@ -456,14 +477,14 @@ async def generate_report_node(state: ResearchState) -> dict[str, Any]:
         error_msg = f"{type(exc).__name__}: {exc}"
 
         if any(k in error_msg for k in ("ReadError", "ConnectError", "TimeoutException")):
-            user_msg = "❌ Lỗi kết nối mạng khi tạo báo cáo."
+            user_msg = "Network error while generating the report."
             logger.error(user_msg)
             await stream_output("logs", user_msg, ws)
         else:
             logger.error("Error generating report: %s", error_msg)
 
         logger.error("Traceback: %s", tb)
-        error_report = f"Lỗi khi tạo báo cáo: {error_msg}. Vui lòng thử lại sau."
+        error_report = f"Report generation failed: {error_msg}. Please try again."
         if ws:
             try:
                 await ws.send_json({"type": "report", "output": error_report})
@@ -484,7 +505,7 @@ async def _generate_suggested_questions(
         raw = await create_chat_completion(
             model=cfg.llm_model,
             messages=[
-                {"role": "system", "content": "You are a research assistant that generates insightful follow-up questions in Vietnamese. Always return a valid JSON array."},
+                {"role": "system", "content": "You are a research assistant that generates insightful follow-up questions in the same language as the user's query. Always return a valid JSON array."},
                 {"role": "user", "content": prompt},
             ],
             temperature=0.7,
@@ -506,7 +527,7 @@ async def _generate_suggested_questions(
             logger.info("Suggested questions generated count=%s", len(questions))
             try:
                 await websocket.send_json({"type": "suggested_questions", "output": questions})
-                await stream_output("logs", f"✅ Đã tạo {len(questions)} câu hỏi gợi ý\n", websocket)
+                await stream_output("logs", f"Generated {len(questions)} follow-up questions\n", websocket)
             except (RuntimeError, OSError):
                 pass
 
@@ -523,5 +544,5 @@ async def process_context_node(state: ResearchState) -> dict[str, Any]:
         sum(len(c) for c in context),
     )
     if not context or all(not c for c in context):
-        await stream_output("logs", "⚠️ Không có context để xử lý\n", state.get("websocket"))
+        await stream_output("logs", "No context collected to process\n", state.get("websocket"))
     return state

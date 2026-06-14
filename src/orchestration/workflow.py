@@ -6,9 +6,11 @@ from langgraph.graph import END, StateGraph
 
 from src.agents.generator import generate_report_node, process_context_node
 from src.agents.planner import choose_agent_node, generate_sub_queries_node
+from src.agents.scope_gate import scope_gate_node
 from src.agents.searcher import parallel_search_and_scrape_node, search_and_scrape_node
 from src.orchestration.router import (
     route_after_agent_selection,
+    route_after_scope_gate,
     route_after_search,
     route_search_mode,
 )
@@ -29,6 +31,7 @@ def build_workflow(*, enable_parallel_search: bool = True, enable_evaluation: bo
     graph = StateGraph(ResearchState)
 
     # --- nodes ---
+    graph.add_node("scope_gate", scope_gate_node)
     graph.add_node("choose_agent", choose_agent_node)
     graph.add_node("generate_sub_queries", generate_sub_queries_node)
     graph.add_node("parallel_search_and_scrape", parallel_search_and_scrape_node)
@@ -39,7 +42,13 @@ def build_workflow(*, enable_parallel_search: bool = True, enable_evaluation: bo
         graph.add_node("evaluate_report", evaluate_state_node)
 
     # --- edges ---
-    graph.set_entry_point("choose_agent")
+    graph.set_entry_point("scope_gate")
+
+    graph.add_conditional_edges(
+        "scope_gate",
+        route_after_scope_gate,
+        {"in_scope": "choose_agent", "refused": END},
+    )
 
     graph.add_conditional_edges(
         "choose_agent",

@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any, Iterable
 
+from src.modes import DEEP, RESEARCH, normalize_mode
+
 
 def _clean_text(value: str) -> str:
     text = re.sub(r"\s+", " ", value or "").strip()
@@ -47,11 +49,12 @@ def build_mode_context(
     if not documents:
         return ""
 
-    if report_type == "phân tích":
+    canonical_mode = normalize_mode(report_type)
+    if canonical_mode == DEEP:
         max_documents = max_documents or 10
         max_chars_per_document = max_chars_per_document or 6000
         max_total_chars = max_total_chars or 50000
-    elif report_type == "đề xuất bài báo":
+    elif canonical_mode == RESEARCH:
         max_documents = max_documents or 12
         max_chars_per_document = max_chars_per_document or 3500
         max_total_chars = max_total_chars or 35000
@@ -70,26 +73,29 @@ def build_mode_context(
 
         clipped_content = raw_content[:max_chars_per_document]
         if len(raw_content) > max_chars_per_document:
-            clipped_content += "\n[Đã rút gọn phần còn lại để giữ context ổn định.]"
+            clipped_content += "\n[Remaining content truncated to keep context stable.]"
 
-        title = document.get("title") or document.get("url") or f"Nguồn {index}"
+        title = document.get("title") or document.get("url") or f"Source {index}"
         url = document.get("url", "")
         score = _document_score(document)
+        category_label = document.get("source_category_label", "")
+        category_line = f"Category: {category_label}\n" if category_label else ""
         reference = _source_reference(str(title), str(url))
         section = (
-            f"### Nguồn {index}: {title}\n"
+            f"### Source {index}: {title}\n"
             f"URL: {url}\n"
-            f"Trích dẫn khuyến nghị: {reference}\n"
+            f"{category_line}"
+            f"Recommended citation: {reference}\n"
             f"Quality score: {score:.2f}\n"
-            f"Liên quan tới truy vấn: {query}\n"
-            f"Nội dung:\n{clipped_content}"
+            f"Relevant to query: {query}\n"
+            f"Content:\n{clipped_content}"
         )
 
         if total_chars + len(section) > max_total_chars:
             remaining = max_total_chars - total_chars
             if remaining <= 1000:
                 break
-            section = section[:remaining] + "\n[Context đã được cắt theo ngân sách ký tự.]"
+            section = section[:remaining] + "\n[Context trimmed to fit the character budget.]"
 
         sections.append(section)
         total_chars += len(section)

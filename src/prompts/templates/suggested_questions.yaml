@@ -1,7 +1,8 @@
 name: suggested_questions
-version: "1"
+version: "2"
 template: |
-  Generate 5 Vietnamese follow-up questions for this research result.
+  Generate 5 follow-up questions for this research result, written in the same
+  language as the original query.
 
   Original query:
   $query

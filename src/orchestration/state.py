@@ -28,3 +28,4 @@ class ResearchState(TypedDict):
     memory: Memory
     evaluation_result: NotRequired[dict[str, Any]]
     history_id: NotRequired[str]
+    scope_refusal: NotRequired[bool]

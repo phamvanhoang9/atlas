@@ -11,6 +11,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from src.api import deps
 from src.api.middleware.auth import require_websocket_auth
+from src.modes import is_known_mode, normalize_mode
 from src.utils.pdf_export import write_md_to_pdf
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,15 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             if not task or not report_type:
                 logger.warning("WebSocket message missing required fields id=%s payload=%s", request_id, json_data)
                 continue
+
+            if not is_known_mode(report_type):
+                logger.warning("WebSocket message with unknown mode id=%s mode=%r", request_id, report_type)
+                await websocket.send_json({
+                    "type": "error",
+                    "output": f"Unknown research mode '{report_type}'. Valid modes: quick, research, deep.",
+                })
+                continue
+            report_type = normalize_mode(report_type)
 
             logger.info(
                 "Research job start id=%s mode=%s task_len=%s existing_history_id=%s",

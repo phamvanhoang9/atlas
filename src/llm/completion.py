@@ -54,7 +54,7 @@ async def create_chat_completion(
 
     # Route model based on task complexity
     routed_model = route_model(
-        report_type=report_type or "hỏi đáp",
+        report_type=report_type or "quick",
         requested_model=model,
         provider=llm_provider,
     )

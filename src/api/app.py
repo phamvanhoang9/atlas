@@ -17,9 +17,12 @@ from fastapi.staticfiles import StaticFiles
 
 from src.api import deps
 from src.api.middleware.auth import configured_auth_token
+from src.api.routes.automation import router as automation_router
 from src.api.routes.evaluation import router as evaluation_router
 from src.api.routes.history import router as history_router
 from src.api.routes.websocket import router as websocket_router
+from src.automation.daily_report import run_daily_report
+from src.automation.scheduler import AutomationScheduler
 
 load_dotenv()
 
@@ -52,7 +55,18 @@ async def lifespan(app: FastAPI):
         cors_origins,
         configured_auth_token() is not None,
     )
+
+    async def _daily_job(trigger: str = "scheduled"):
+        return await run_daily_report(deps.automation_store, deps.history_manager, trigger=trigger)
+
+    stale = deps.automation_store.fail_stale_running_runs()
+    if stale:
+        logger.warning("Marked %s interrupted automation run(s) as failed", stale)
+
+    scheduler = AutomationScheduler(deps.automation_store, _daily_job)
+    scheduler.start()
     yield
+    await scheduler.stop()
     logger.info("ATLAS shutdown")
 
 
@@ -99,7 +113,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=cors_origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST", "DELETE"],
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["*"],
     )
 
@@ -122,6 +136,7 @@ def create_app() -> FastAPI:
     app.include_router(websocket_router)
     app.include_router(history_router)
     app.include_router(evaluation_router)
+    app.include_router(automation_router)
     return app
 
 
