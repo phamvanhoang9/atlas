@@ -120,6 +120,7 @@ config.json
 !config.json.example
 docs/agent-memory/
 docs/superpowers/
+docs/session-context.md
 
 # Project: local-only entry points
 run_benchmark.py
