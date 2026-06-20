@@ -52,6 +52,10 @@ class SQLiteHistoryManager:
                 connection.execute(
                     "ALTER TABLE history ADD COLUMN kind TEXT NOT NULL DEFAULT 'chat'"
                 )
+            if "session_id" not in columns:
+                connection.execute(
+                    "ALTER TABLE history ADD COLUMN session_id TEXT NOT NULL DEFAULT ''"
+                )
             connection.execute("CREATE INDEX IF NOT EXISTS idx_history_timestamp ON history(timestamp DESC)")
 
     def _row_to_entry(self, row: sqlite3.Row) -> dict[str, Any]:
@@ -67,6 +71,7 @@ class SQLiteHistoryManager:
             "preview": row["preview"],
             "evaluation_result": json.loads(row["evaluation_result"]),
             "kind": row["kind"] if "kind" in keys else "chat",
+            "session_id": row["session_id"] if "session_id" in keys else "",
         }
 
     def add_entry(
@@ -78,6 +83,7 @@ class SQLiteHistoryManager:
         pdf_path: str = "",
         evaluation_result: Optional[dict[str, Any]] = None,
         kind: str = "chat",
+        session_id: str = "",
     ) -> str:
         entry_id = str(uuid.uuid4())
         preview = self._generate_preview(report)
@@ -85,8 +91,9 @@ class SQLiteHistoryManager:
             connection.execute(
                 """
                 INSERT INTO history (
-                    id, timestamp, query, mode, report, suggested_questions, pdf_path, preview, evaluation_result, kind
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    id, timestamp, query, mode, report, suggested_questions, pdf_path, preview,
+                    evaluation_result, kind, session_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     entry_id,
@@ -99,6 +106,7 @@ class SQLiteHistoryManager:
                     preview,
                     json.dumps(evaluation_result or {}, ensure_ascii=False),
                     kind,
+                    session_id or "",
                 ),
             )
         return entry_id

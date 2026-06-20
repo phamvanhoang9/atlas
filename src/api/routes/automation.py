@@ -130,6 +130,11 @@ async def trigger_manual_run(_: None = Depends(require_api_auth)) -> JSONRespons
 @router.get("/runs")
 async def list_runs(limit: int = 50, _: None = Depends(require_api_auth)) -> JSONResponse:
     limit = max(1, min(limit, 200))
+    # Self-heal: drop runs whose daily report no longer exists in history so the
+    # list always mirrors the reports the user can actually open.
+    entries = await deps.run_sync(deps.history_manager.get_all_entries)
+    valid_ids = {e["id"] for e in entries if e.get("kind") == "daily_report"}
+    await deps.run_sync(deps.automation_store.prune_orphan_runs, valid_ids)
     runs = await deps.run_sync(deps.automation_store.list_runs, limit)
     return JSONResponse(content={"success": True, "data": runs})
 

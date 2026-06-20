@@ -1,46 +1,18 @@
 import os
-import sys
 
+# Disable caches/reranking BEFORE importing anything from `src`: `src/__init__`
+# eagerly imports the orchestration + config stack, which reads these env vars at
+# import time. Setting them here (not just in pytest_configure) guarantees the
+# defaults win even though the import below pulls in `src`.
+os.environ.setdefault("ENABLE_SEARCH_CACHE", "false")
+os.environ.setdefault("ENABLE_EMBEDDING_CACHE", "false")
+os.environ.setdefault("ENABLE_CROSS_ENCODER_RERANKING", "false")
 
-def _patch_multiprocess_resource_tracker() -> None:
-    """multiprocess 0.70.x calls self._lock._recursion_count() in _stop_locked,
-    but _thread.RLock dropped that method in Python 3.12, causing AttributeError
-    on process exit. Replace _stop_locked with an identical copy that guards the
-    call. All external refs are bound as default args so the function stays valid
-    during interpreter shutdown when module globals are set to None."""
-    if sys.version_info < (3, 12):
-        return
-    try:
-        import os as _os
-        import multiprocess.resource_tracker as _rt  # type: ignore[import-not-found]
+from src.observability.logging import patch_multiprocess_resource_tracker  # noqa: E402
 
-        def _stop_locked(
-            self: object,
-            close: object = _os.close,
-            waitpid: object = _os.waitpid,
-            waitstatus_to_exitcode: object = _os.waitstatus_to_exitcode,
-        ) -> None:
-            try:
-                rc = self._lock._recursion_count()  # type: ignore[attr-defined]
-            except AttributeError:
-                rc = 0
-            if rc > 1:
-                return self._reentrant_call_error()  # type: ignore[attr-defined]
-            if self._fd is None:  # type: ignore[attr-defined]
-                return
-            if self._pid is None:  # type: ignore[attr-defined]
-                return
-            close(self._fd)  # type: ignore[operator,attr-defined]
-            self._fd = None  # type: ignore[attr-defined]
-            waitpid(self._pid, 0)  # type: ignore[operator,attr-defined]
-            self._pid = None  # type: ignore[attr-defined]
-
-        _rt.ResourceTracker._stop_locked = _stop_locked  # type: ignore[method-assign]
-    except Exception:  # noqa: BLE001
-        pass
-
-
-_patch_multiprocess_resource_tracker()
+# Apply the Python 3.12 multiprocess RLock guard before tests import multiprocess
+# (RAGAS/datasets). Shared with the runtime path in src/observability/logging.py.
+patch_multiprocess_resource_tracker()
 
 
 def pytest_configure() -> None:

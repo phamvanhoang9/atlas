@@ -9,23 +9,32 @@
     <link rel="icon" href="/static/researcher.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/site/styles.css?v=20"/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="/site/theme.js?v=24"></script>
+    <link rel="stylesheet" href="/site/styles.css?v=24"/>
 </head>
 
 <body>
+<div class="app">
 
 <header class="topbar">
     <div class="topbar-inner">
         <a class="brand" href="/" aria-label="ATLAS home">
             <span class="brand-name">ATLAS</span>
-            <span class="brand-sub">AI Research &amp; Intelligence</span>
+            <span class="brand-sub" data-i18n="brand.sub">AI Research &amp; Intelligence</span>
         </a>
-        <nav class="nav-tabs" aria-label="Main navigation">
-            <button class="nav-tab active" data-view="research" type="button">Research</button>
-            <button class="nav-tab" data-view="automation" type="button">Automation</button>
-            <button class="nav-tab" data-view="history" type="button">History</button>
-        </nav>
+        <div class="nav-right">
+            <nav class="nav-tabs" aria-label="Main navigation">
+                <button class="nav-tab active" data-view="research" type="button" data-i18n="nav.research">Research</button>
+                <button class="nav-tab" data-view="automation" type="button" data-i18n="nav.automation">Automation</button>
+                <button class="nav-tab" data-view="history" type="button" data-i18n="nav.history">History</button>
+            </nav>
+            <button id="newChat" class="icon-pill accent" type="button" data-i18n-title="action.newChat.tip">
+                <span aria-hidden="true">✎</span><span class="nc-label" data-i18n="action.newChat">New chat</span>
+            </button>
+            <button id="langToggle" class="icon-pill" type="button" data-i18n-title="lang.toggle.tip">VI</button>
+            <button id="themeToggle" class="icon-pill square" type="button" data-i18n-title="theme.toggle.tip">☀</button>
+        </div>
     </div>
 </header>
 
@@ -33,208 +42,190 @@
 
     <!-- ===================== RESEARCH VIEW ===================== -->
     <section id="view-research" class="view active" aria-label="Research">
-
-        <form id="researchForm" class="query-card" autocomplete="off">
-            <label class="query-label" for="task" id="taskLabel">Ask about AI research, models, tools, or papers</label>
-            <div class="query-row">
-                <input type="text" id="task" name="task" class="query-input"
-                       placeholder="e.g. How does speculative decoding speed up LLM inference?" required>
-                <button id="submitResearch" type="submit" class="btn btn-primary">Run</button>
-            </div>
-            <div class="mode-picker" role="radiogroup" aria-label="Research mode">
-                <label class="mode-option">
-                    <input type="radio" name="report_type" value="quick" checked>
-                    <span class="mode-body">
-                        <span class="mode-name">Quick Answer</span>
-                        <span class="mode-desc">Fast, cited answer to a direct question</span>
-                    </span>
-                </label>
-                <label class="mode-option">
-                    <input type="radio" name="report_type" value="research">
-                    <span class="mode-body">
-                        <span class="mode-name">Research</span>
-                        <span class="mode-desc">Structured report from papers &amp; official sources</span>
-                    </span>
-                </label>
-                <label class="mode-option">
-                    <input type="radio" name="report_type" value="deep">
-                    <span class="mode-body">
-                        <span class="mode-name">Deep Research</span>
-                        <span class="mode-desc">Multi-step analysis with impact &amp; confidence</span>
-                    </span>
-                </label>
-            </div>
-        </form>
-
-        <div id="researchEmpty" class="empty-state">
-            <h2>Verified answers about the AI landscape</h2>
-            <p>ATLAS searches the web, ranks every source by a transparent 9-category quality score,
-               and writes a report where every reference link is a URL it actually read.
-               Out-of-scope (non-AI) questions are refused honestly instead of answered badly.</p>
-        </div>
-
-        <div id="progressCard" class="card progress-card is-hidden" aria-live="polite">
-            <div class="progress-head">
-                <span class="spinner" id="progressSpinner"></span>
-                <span class="progress-stage" id="progressStage">Starting research…</span>
-            </div>
-            <div class="progress-log" id="progressLog"></div>
-        </div>
-
-        <div id="errorCard" class="card error-card is-hidden" role="alert"></div>
-
-        <div id="refusalCard" class="card refusal-card is-hidden">
-            <div class="refusal-title">Out of scope</div>
-            <div class="refusal-body" id="refusalBody"></div>
-        </div>
-
-        <div id="resultArea" class="result-grid is-hidden">
-            <article class="card report-card">
-                <div class="report-head">
-                    <span id="modeBadge" class="mode-badge"></span>
-                    <div class="report-actions">
-                        <button id="copyToClipboard" type="button" class="btn btn-ghost" disabled>Copy</button>
-                        <a id="downloadLink" class="btn btn-ghost disabled" href="#" target="_blank" rel="noopener">PDF</a>
-                    </div>
+        <div class="thread-scroll">
+            <div class="thread-scroll-inner">
+                <div id="heroState" class="hero">
+                    <div class="hero-orb" aria-hidden="true"></div>
+                    <div id="heroGreeting" class="hero-greeting"></div>
+                    <div id="heroLine" class="hero-line"></div>
+                    <div id="starterChips" class="starter-chips"></div>
                 </div>
-                <div id="reportContainer" class="report-content"></div>
-                <div id="qualityNote" class="quality-note is-hidden"></div>
-                <div id="status" class="report-status" role="status"></div>
-            </article>
-            <aside class="side-col">
-                <div class="card sources-card">
-                    <h3 class="side-title">Sources <span id="sourceCount" class="count-chip"></span></h3>
-                    <div id="sourcesList" class="sources-list">
-                        <p class="empty-note">Sources appear here as they are found and ranked.</p>
-                    </div>
-                </div>
-                <div class="card questions-card">
-                    <h3 class="side-title">Follow-up questions</h3>
-                    <div id="suggestedQuestions" class="suggested-questions">
-                        <p class="empty-note">Generated after the report is ready.</p>
-                    </div>
-                </div>
-            </aside>
+                <div id="thread"></div>
+            </div>
         </div>
 
+        <div class="composer-dock">
+            <div class="composer-inner">
+                <form id="composerForm" class="composer" autocomplete="off" novalidate>
+                    <button id="plusBtn" class="plus-btn" type="button" disabled data-i18n-title="composer.plus.tip" aria-label="Attach files">+</button>
+                    <textarea id="task" name="task" rows="1" data-i18n-placeholder="composer.placeholder"
+                              placeholder="Ask anything about the AI landscape…"></textarea>
+                    <div class="mode-select">
+                        <button id="modeBtn" class="mode-trigger" type="button"
+                                aria-haspopup="listbox" aria-expanded="false" data-i18n-title="mode.select.tip">
+                            <span class="mode-trigger-icon" id="modeBtnIcon" aria-hidden="true">⚡</span>
+                            <span class="mode-trigger-label" id="modeBtnLabel" data-i18n="mode.quick">Quick</span>
+                            <span class="mode-trigger-caret" aria-hidden="true">▾</span>
+                        </button>
+                        <div id="modePopover" class="mode-popover is-hidden" role="listbox" aria-label="Research mode">
+                            <button class="mode-option" type="button" role="option" data-mode="quick" aria-selected="true">
+                                <span class="mode-option-icon" aria-hidden="true">⚡</span>
+                                <span class="mode-option-text">
+                                    <span class="mode-option-title" data-i18n="mode.quick">Quick</span>
+                                    <span class="mode-option-desc" data-i18n="mode.quick.tip">Fast, cited answer to a direct question.</span>
+                                </span>
+                            </button>
+                            <button class="mode-option" type="button" role="option" data-mode="research" aria-selected="false">
+                                <span class="mode-option-icon" aria-hidden="true">📑</span>
+                                <span class="mode-option-text">
+                                    <span class="mode-option-title" data-i18n="mode.research">Research</span>
+                                    <span class="mode-option-desc" data-i18n="mode.research.tip">Structured report from papers & official sources.</span>
+                                </span>
+                            </button>
+                            <button class="mode-option" type="button" role="option" data-mode="deep" aria-selected="false">
+                                <span class="mode-option-icon" aria-hidden="true">🔬</span>
+                                <span class="mode-option-text">
+                                    <span class="mode-option-title" data-i18n="mode.deep">Deep Research</span>
+                                    <span class="mode-option-desc" data-i18n="mode.deep.tip">Multi-step analysis with impact & confidence.</span>
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                    <input type="hidden" name="report_type" id="reportType" value="quick">
+                    <button id="sendBtn" class="send-btn" type="submit" data-i18n-title="composer.send.tip" aria-label="Send">↑</button>
+                </form>
+                <div class="tagline" data-i18n="tagline">Cites everything. Guesses nothing.</div>
+            </div>
+        </div>
     </section>
 
     <!-- ===================== AUTOMATION VIEW ===================== -->
     <section id="view-automation" class="view" aria-label="Automation">
-        <div class="view-head">
-            <h2>Daily AI Intelligence</h2>
-            <p>ATLAS runs a deep research pass over your topics on a schedule and emails the report.
-               <span id="emailModeChip" class="chip"></span></p>
-        </div>
+        <div class="page">
+            <div class="page-inner">
+                <div class="view-head">
+                    <h2 data-i18n="auto.title">Daily AI Intelligence</h2>
+                    <p><span data-i18n="auto.subtitle">ATLAS runs a deep research pass over your topics on a schedule and emails the report.</span>
+                       <span id="emailModeChip" class="chip"></span></p>
+                </div>
 
-        <div class="automation-grid">
-            <form id="automationForm" class="card automation-card">
-                <div class="field-row toggle-row">
-                    <label class="toggle">
-                        <input type="checkbox" id="autoEnabled">
-                        <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                    </label>
-                    <div>
-                        <div class="field-title">Daily report enabled</div>
-                        <div class="field-hint">Runs once per day at the scheduled local time.</div>
+                <div class="automation-grid">
+                    <form id="automationForm" class="card automation-card">
+                        <div class="field-row toggle-row">
+                            <label class="toggle">
+                                <input type="checkbox" id="autoEnabled">
+                                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                            </label>
+                            <div>
+                                <div class="field-title" data-i18n="auto.enabled">Daily report enabled</div>
+                                <div class="field-hint" data-i18n="auto.enabled.hint">Runs once per day at the scheduled local time.</div>
+                            </div>
+                        </div>
+
+                        <div class="field-grid">
+                            <div class="field">
+                                <label for="autoTime" data-i18n="auto.time">Time (24h)</label>
+                                <input type="time" id="autoTime" value="05:00" required>
+                            </div>
+                            <div class="field">
+                                <label for="autoTimezone" data-i18n="auto.timezone">Timezone (IANA)</label>
+                                <input type="text" id="autoTimezone" list="tzList" placeholder="Asia/Ho_Chi_Minh" required>
+                                <datalist id="tzList">
+                                    <option value="Asia/Ho_Chi_Minh"></option>
+                                    <option value="Asia/Tokyo"></option>
+                                    <option value="Asia/Singapore"></option>
+                                    <option value="Europe/London"></option>
+                                    <option value="Europe/Berlin"></option>
+                                    <option value="America/New_York"></option>
+                                    <option value="America/Los_Angeles"></option>
+                                    <option value="UTC"></option>
+                                </datalist>
+                            </div>
+                        </div>
+
+                        <div class="field">
+                            <label for="autoEmail" data-i18n="auto.email">Recipient email</label>
+                            <input type="email" id="autoEmail" placeholder="you@example.com">
+                        </div>
+
+                        <div class="field">
+                            <label for="autoTopics"><span data-i18n="auto.topics">Topics</span>
+                                <span class="field-hint-inline" data-i18n="auto.topics.hint">one per line, max 20</span></label>
+                            <textarea id="autoTopics" rows="5" placeholder="new LLM releases and benchmarks&#10;AI coding tools and agents&#10;open-source AI infrastructure"></textarea>
+                        </div>
+
+                        <div class="field">
+                            <label for="autoDepth" data-i18n="auto.depth">Research depth</label>
+                            <select id="autoDepth">
+                                <option value="quick" data-i18n="auto.depth.quick">Quick — headlines only</option>
+                                <option value="research" data-i18n="auto.depth.research">Research — structured digest</option>
+                                <option value="deep" selected data-i18n="auto.depth.deep">Deep — full intelligence report</option>
+                            </select>
+                        </div>
+
+                        <div class="form-foot">
+                            <button type="submit" class="btn btn-primary" id="autoSave" data-i18n="auto.save">Save settings</button>
+                            <span id="automationStatus" class="form-status" role="status"></span>
+                        </div>
+                    </form>
+
+                    <div class="card runs-card">
+                        <div class="runs-head">
+                            <h3 class="side-title" data-i18n="auto.runs">Recent runs</h3>
+                            <div class="runs-actions">
+                                <button type="button" class="btn btn-secondary" id="runNow" data-i18n="auto.runNow">Run now</button>
+                                <button type="button" class="btn btn-ghost" id="refreshRuns" data-i18n="auto.refresh">Refresh</button>
+                            </div>
+                        </div>
+                        <div id="runsList" class="runs-list">
+                            <p class="empty-note" data-i18n="auto.runs.empty">No runs yet. Enable the schedule or click “Run now”.</p>
+                        </div>
                     </div>
-                </div>
-
-                <div class="field-grid">
-                    <div class="field">
-                        <label for="autoTime">Time (24h)</label>
-                        <input type="time" id="autoTime" value="05:00" required>
-                    </div>
-                    <div class="field">
-                        <label for="autoTimezone">Timezone (IANA)</label>
-                        <input type="text" id="autoTimezone" list="tzList" placeholder="Asia/Ho_Chi_Minh" required>
-                        <datalist id="tzList">
-                            <option value="Asia/Ho_Chi_Minh"></option>
-                            <option value="Asia/Tokyo"></option>
-                            <option value="Asia/Singapore"></option>
-                            <option value="Europe/London"></option>
-                            <option value="Europe/Berlin"></option>
-                            <option value="America/New_York"></option>
-                            <option value="America/Los_Angeles"></option>
-                            <option value="UTC"></option>
-                        </datalist>
-                    </div>
-                </div>
-
-                <div class="field">
-                    <label for="autoEmail">Recipient email</label>
-                    <input type="email" id="autoEmail" placeholder="you@example.com">
-                </div>
-
-                <div class="field">
-                    <label for="autoTopics">Topics <span class="field-hint-inline">one per line, max 20</span></label>
-                    <textarea id="autoTopics" rows="5" placeholder="new LLM releases and benchmarks&#10;AI coding tools and agents&#10;open-source AI infrastructure"></textarea>
-                </div>
-
-                <div class="field">
-                    <label for="autoDepth">Research depth</label>
-                    <select id="autoDepth">
-                        <option value="quick">Quick — headlines only</option>
-                        <option value="research">Research — structured digest</option>
-                        <option value="deep" selected>Deep — full intelligence report</option>
-                    </select>
-                </div>
-
-                <div class="form-foot">
-                    <button type="submit" class="btn btn-primary" id="autoSave">Save settings</button>
-                    <span id="automationStatus" class="form-status" role="status"></span>
-                </div>
-            </form>
-
-            <div class="card runs-card">
-                <div class="runs-head">
-                    <h3 class="side-title">Recent runs</h3>
-                    <div class="runs-actions">
-                        <button type="button" class="btn btn-secondary" id="runNow">Run now</button>
-                        <button type="button" class="btn btn-ghost" id="refreshRuns" title="Refresh run list">Refresh</button>
-                    </div>
-                </div>
-                <div id="runsList" class="runs-list">
-                    <p class="empty-note">No runs yet. Enable the schedule or click “Run now”.</p>
                 </div>
             </div>
+            <div class="tagline-line" data-i18n="tagline">Cites everything. Guesses nothing.</div>
         </div>
     </section>
 
     <!-- ===================== HISTORY VIEW ===================== -->
     <section id="view-history" class="view" aria-label="History">
-        <div class="view-head with-tools">
-            <div>
-                <h2>History</h2>
-                <p>Every chat report and daily intelligence report, stored locally.</p>
-            </div>
-            <div class="history-tools">
-                <input type="search" id="historySearch" class="search-input" placeholder="Search history…">
-                <div class="filter-tabs" role="tablist" aria-label="History filter">
-                    <button class="filter-tab active" data-kind="" type="button">All</button>
-                    <button class="filter-tab" data-kind="chat" type="button">Chat</button>
-                    <button class="filter-tab" data-kind="daily_report" type="button">Daily reports</button>
+        <div class="page">
+            <div class="page-inner">
+                <div class="view-head with-tools">
+                    <div>
+                        <h2 data-i18n="hist.title">History</h2>
+                        <p data-i18n="hist.subtitle">Every chat report and daily intelligence report, stored locally.</p>
+                    </div>
+                    <div class="history-tools">
+                        <input type="search" id="historySearch" class="search-input" data-i18n-placeholder="hist.search" placeholder="Search history…">
+                        <div class="filter-tabs" role="tablist" aria-label="History filter">
+                            <button class="filter-tab active" data-kind="" type="button" data-i18n="hist.all">All</button>
+                            <button class="filter-tab" data-kind="chat" type="button" data-i18n="hist.chat">Chat</button>
+                            <button class="filter-tab" data-kind="daily_report" type="button" data-i18n="hist.daily">Daily reports</button>
+                        </div>
+                        <button type="button" class="btn btn-ghost" id="exportHistory" data-i18n="hist.export">Export</button>
+                        <button type="button" class="btn btn-danger-ghost" id="clearHistory" data-i18n="hist.clear">Clear all</button>
+                    </div>
                 </div>
-                <button type="button" class="btn btn-ghost" id="exportHistory">Export</button>
-                <button type="button" class="btn btn-danger-ghost" id="clearHistory">Clear all</button>
+                <div id="historyList" class="history-grid">
+                    <div class="empty-note loading-note" data-i18n="hist.loading">Loading history…</div>
+                </div>
             </div>
-        </div>
-        <div id="historyList" class="history-grid">
-            <div class="empty-note loading-note">Loading history…</div>
+            <div class="tagline-line" data-i18n="tagline">Cites everything. Guesses nothing.</div>
         </div>
     </section>
 
 </main>
+</div>
 
-<footer class="app-footer">
-    <span>ATLAS — open-source AI research &amp; intelligence platform</span>
-    <a target="_blank" rel="noopener" href="https://github.com/phamvanhoang9/vigpt-researcher">GitHub</a>
-</footer>
+<div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="false"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/1.9.1/showdown.min.js"></script>
-<script src="/site/scripts.js?v=20"></script>
-<script src="/site/history.js?v=20"></script>
-<script src="/site/automation.js?v=20"></script>
+<script src="/site/toast.js?v=24"></script>
+<script src="/site/i18n.js?v=24"></script>
+<script src="/site/scripts.js?v=24"></script>
+<script src="/site/history.js?v=24"></script>
+<script src="/site/automation.js?v=24"></script>
 </body>
 
 </html>

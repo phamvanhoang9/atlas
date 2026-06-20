@@ -41,6 +41,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             task = json_data.get("task")
             report_type = json_data.get("report_type")
             history_id = json_data.get("history_id")
+            session_id = json_data.get("session_id") or ""
 
             if not task or not report_type:
                 logger.warning("WebSocket message missing required fields id=%s payload=%s", request_id, json_data)
@@ -63,7 +64,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 bool(history_id),
             )
             if not history_id:
-                history_id = await deps.run_sync(deps.history_manager.add_entry, task, report_type)
+                history_id = await deps.run_sync(
+                    deps.history_manager.add_entry, task, report_type, session_id=session_id
+                )
                 await websocket.send_json({"type": "history_id", "output": history_id})
                 logger.info("Research job history created id=%s history_id=%s", request_id, history_id)
 

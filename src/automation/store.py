@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import uuid
+from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
@@ -197,16 +198,52 @@ class AutomationStore:
             ).fetchone()
         return bool(row["n"])
 
-    def fail_stale_running_runs(self) -> int:
-        """Mark 'running' rows as failed (e.g. after an app crash/restart)."""
+    def clear_stale_running_runs(self) -> int:
+        """Delete 'running' rows left over from a crash/restart (they produced
+        nothing). Recent runs only ever shows runs that produced a report."""
+        with self._lock, self._connect() as connection:
+            cursor = connection.execute("DELETE FROM automation_runs WHERE status = 'running'")
+        return cursor.rowcount
+
+    def delete_run(self, run_id: str) -> int:
+        """Delete a single run row by id. Returns rows removed."""
+        if not run_id:
+            return 0
+        with self._lock, self._connect() as connection:
+            cursor = connection.execute("DELETE FROM automation_runs WHERE id = ?", (run_id,))
+        return cursor.rowcount
+
+    def delete_runs_by_history_id(self, history_id: str) -> int:
+        """Delete runs linked to a deleted history entry (cascade). Empty id is a no-op."""
+        if not history_id:
+            return 0
         with self._lock, self._connect() as connection:
             cursor = connection.execute(
-                """
-                UPDATE automation_runs
-                SET status = 'failed', finished_at = ?,
-                    error_log = 'Run interrupted (app restart while running)'
-                WHERE status = 'running'
-                """,
-                (datetime.now(timezone.utc).isoformat(),),
+                "DELETE FROM automation_runs WHERE history_id = ?", (history_id,)
             )
+        return cursor.rowcount
+
+    def prune_orphan_runs(self, valid_history_ids: Iterable[str]) -> int:
+        """Delete finished runs whose linked history entry no longer exists, so
+        "Recent runs" always mirrors the daily reports that still exist. Runs that
+        are still 'running' are never pruned (they have no history_id yet)."""
+        valid = [hid for hid in set(valid_history_ids) if hid]
+        with self._lock, self._connect() as connection:
+            if valid:
+                placeholders = ",".join("?" for _ in valid)
+                cursor = connection.execute(
+                    f"DELETE FROM automation_runs "
+                    f"WHERE status != 'running' AND history_id NOT IN ({placeholders})",
+                    valid,
+                )
+            else:
+                cursor = connection.execute(
+                    "DELETE FROM automation_runs WHERE status != 'running'"
+                )
+        return cursor.rowcount
+
+    def clear_runs(self) -> int:
+        """Delete every automation run row. Config is left intact. Returns rows removed."""
+        with self._lock, self._connect() as connection:
+            cursor = connection.execute("DELETE FROM automation_runs")
         return cursor.rowcount

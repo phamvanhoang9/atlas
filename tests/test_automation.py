@@ -63,11 +63,73 @@ def test_store_run_lifecycle(store: AutomationStore) -> None:
     assert len(runs) == 1
 
 
-def test_store_fails_stale_running_runs(store: AutomationStore) -> None:
+def test_store_clears_stale_running_runs(store: AutomationStore) -> None:
     store.create_run("scheduled")
-    assert store.fail_stale_running_runs() == 1
+    assert store.clear_stale_running_runs() == 1
     assert not store.has_running_run()
-    assert store.list_runs()[0]["status"] == "failed"
+    # Stale (crash-interrupted) rows are deleted, not kept as 'failed' clutter.
+    assert store.list_runs() == []
+
+
+def test_delete_run_removes_single_row(store: AutomationStore) -> None:
+    keep = store.create_run("manual")
+    drop = store.create_run("manual")
+    assert store.delete_run(drop) == 1
+    ids = {r["id"] for r in store.list_runs()}
+    assert keep in ids and drop not in ids
+
+
+def test_prune_orphan_runs_removes_runs_without_valid_history(store: AutomationStore) -> None:
+    keep = store.create_run("manual")
+    store.finish_run(keep, "success", history_id="H1")
+    orphan = store.create_run("manual")
+    store.finish_run(orphan, "success", history_id="H_GONE")
+    running = store.create_run("scheduled")  # in-progress, history_id=""
+
+    removed = store.prune_orphan_runs({"H1"})
+
+    assert removed == 1
+    ids = {r["id"] for r in store.list_runs()}
+    assert keep in ids        # run whose history still exists is kept
+    assert orphan not in ids  # run whose history was deleted is pruned
+    assert running in ids     # in-progress runs are never pruned
+
+
+def test_prune_orphan_runs_empty_valid_set_keeps_running_only(store: AutomationStore) -> None:
+    done = store.create_run("manual")
+    store.finish_run(done, "success", history_id="H1")
+    running = store.create_run("scheduled")
+    assert store.prune_orphan_runs(set()) == 1
+    ids = {r["id"] for r in store.list_runs()}
+    assert done not in ids and running in ids
+
+
+def test_delete_runs_by_history_id_removes_only_matching(store: AutomationStore) -> None:
+    keep = store.create_run("manual")
+    store.finish_run(keep, "success", history_id="H1")
+    drop = store.create_run("manual")
+    store.finish_run(drop, "success", history_id="H2")
+    assert store.delete_runs_by_history_id("H2") == 1
+    ids = {r["id"] for r in store.list_runs()}
+    assert keep in ids and drop not in ids
+    assert store.delete_runs_by_history_id("") == 0  # empty id never deletes
+
+
+def test_clear_runs_removes_all_runs_but_keeps_config(store: AutomationStore) -> None:
+    store.update_config({"enabled": True, "topics": ["llm"]})
+    r1 = store.create_run("manual")
+    store.finish_run(r1, status="success")
+    store.create_run("scheduled")
+    assert len(store.list_runs()) == 2
+
+    deleted = store.clear_runs()
+
+    assert deleted == 2
+    assert store.list_runs() == []
+    # Config (schedule/topics) must survive a runs clear.
+    config = store.get_config()
+    assert config["enabled"] is True
+    assert config["topics"] == ["llm"]
 
 
 # ------------------------------------------------------------------ scheduler
@@ -304,6 +366,19 @@ async def test_run_daily_report_short_report_not_emailed(store: AutomationStore)
     assert run["status"] == "failed"
     assert run["email_status"] == "skipped"
     assert "short" in run["error_log"].lower()
+
+
+@pytest.mark.asyncio
+async def test_run_daily_report_failure_leaves_no_run_row(store: AutomationStore) -> None:
+    # Incomplete config (no recipient) -> failure. The run must not linger in the list.
+    history = _FakeHistory()
+    run = await run_daily_report(
+        store, history, trigger="manual",
+        email_sender=_mock_sender(),
+        researcher_factory=lambda q, m: _FakeResearcher("# r" + "x" * 500),
+    )
+    assert run["status"] == "failed"
+    assert store.list_runs() == []
 
 
 @pytest.mark.asyncio

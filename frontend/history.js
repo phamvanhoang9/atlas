@@ -5,18 +5,19 @@
 
 const AtlasHistory = (() => {
     const { authHeaders, withAuthToken, escapeHtml, timeAgo } = window.AtlasShared;
+    const t = (k, v) => AtlasI18n.t(k, v);
 
     let allEntries = [];
-    let kindFilter = "";       // "" | "chat" | "daily"
+    let kindFilter = "";       // "" | "chat" | "daily_report"
     let searchTerm = "";
     let currentHistoryId = null;
     let loaded = false;
 
     const el = (id) => document.getElementById(id);
 
-    const MODE_LABELS = {
-        quick: "Quick Answer", research: "Research", deep: "Deep Research",
-        "hỏi đáp": "Quick Answer", "đề xuất bài báo": "Research", "phân tích": "Deep Research",
+    const MODE_LABEL_KEYS = {
+        quick: "mode.quick", research: "mode.research", deep: "mode.deep",
+        "hỏi đáp": "mode.quick", "đề xuất bài báo": "mode.research", "phân tích": "mode.deep",
     };
     const MODE_CLASSES = {
         quick: "quick", research: "research", deep: "deep",
@@ -27,7 +28,7 @@ const AtlasHistory = (() => {
 
     const loadHistory = async () => {
         const list = el("historyList");
-        list.innerHTML = '<div class="empty-note loading-note">Loading history…</div>';
+        list.innerHTML = `<div class="empty-note loading-note">${escapeHtml(t("hist.loading"))}</div>`;
         try {
             const response = await fetch("/api/history?limit=200", { headers: authHeaders() });
             const data = await response.json();
@@ -37,8 +38,8 @@ const AtlasHistory = (() => {
             render();
         } catch (error) {
             console.error("History load failed:", error);
-            list.innerHTML =
-                '<div class="history-empty">Could not load history. Check the server logs and refresh.</div>';
+            list.innerHTML = `<div class="history-empty">${escapeHtml(t("hist.loadError"))}</div>`;
+            if (window.AtlasToast) AtlasToast.error(t("hist.loadError"));
         }
     };
 
@@ -59,42 +60,65 @@ const AtlasHistory = (() => {
         const entries = visibleEntries();
 
         if (entries.length === 0) {
-            const message = allEntries.length === 0
-                ? "No reports yet. Run a research query or enable the daily automation."
-                : "Nothing matches the current filter.";
+            const message = allEntries.length === 0 ? t("hist.empty") : t("hist.noMatch");
             list.innerHTML = `<div class="history-empty">${escapeHtml(message)}</div>`;
             return;
         }
 
-        list.innerHTML = "";
+        // Group entries by session_id; empty session_id = standalone (its own group).
+        const groups = [];
+        const bySession = {};
         entries.forEach((entry) => {
-            const kind = entry.kind || "chat";
+            const sid = entry.session_id;
+            if (sid) {
+                if (!bySession[sid]) { bySession[sid] = { sessionId: sid, entries: [] }; groups.push(bySession[sid]); }
+                bySession[sid].entries.push(entry);
+            } else {
+                groups.push({ sessionId: null, entries: [entry] });
+            }
+        });
+
+        list.innerHTML = "";
+        groups.forEach((group) => {
+            // entries arrive newest-first; oldest is the first question of the conversation.
+            const ordered = group.entries.slice().sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            const latest = group.entries[0];
+            const oldest = ordered[0];
+            const kind = latest.kind || "chat";
+            const count = group.entries.length;
+
             const card = document.createElement("div");
             card.className = "history-item";
-            card.dataset.id = entry.id;
 
-            const badgeClass = kind === "daily_report" ? "daily" : (MODE_CLASSES[entry.mode] || "research");
-            const badgeText = kind === "daily_report" ? "Daily Intelligence" : (MODE_LABELS[entry.mode] || entry.mode || "Report");
+            const badgeClass = kind === "daily_report" ? "daily" : (MODE_CLASSES[latest.mode] || "research");
+            const badgeText = kind === "daily_report"
+                ? t("badge.daily")
+                : t(MODE_LABEL_KEYS[latest.mode] || "mode.research");
+            const countChip = (group.sessionId && count > 1)
+                ? `<span class="count-chip">${escapeHtml(t("session.turns", { n: count }))}</span>`
+                : "";
 
             card.innerHTML = `
                 <div class="history-item-head">
                     <span class="mode-badge ${badgeClass}">${escapeHtml(badgeText)}</span>
+                    ${countChip}
                 </div>
-                <div class="history-item-query">${escapeHtml(entry.query || "(untitled)")}</div>
-                <div class="history-item-preview">${escapeHtml(entry.preview || "")}</div>
+                <div class="history-item-query">${escapeHtml(oldest.query || "(untitled)")}</div>
+                <div class="history-item-preview">${escapeHtml(latest.preview || "")}</div>
                 <div class="history-item-foot">
-                    <span class="history-item-time">${escapeHtml(timeAgo(entry.timestamp))}</span>
-                    <button class="icon-btn history-delete" title="Delete entry" type="button">Delete</button>
+                    <span class="history-item-time">${escapeHtml(timeAgo(latest.timestamp))}</span>
+                    <button class="icon-btn history-delete" title="${escapeHtml(t("hist.delete"))}" type="button">${escapeHtml(t("hist.delete"))}</button>
                 </div>
             `;
 
             card.addEventListener("click", (event) => {
                 if (event.target.closest(".history-delete")) return;
-                openEntry(entry.id);
+                if (group.sessionId) window.Atlas.displayStoredSession(ordered);
+                else window.Atlas.displayStoredReport(latest);
             });
             card.querySelector(".history-delete").addEventListener("click", (event) => {
                 event.stopPropagation();
-                deleteEntry(entry.id);
+                deleteGroup(group);
             });
 
             list.appendChild(card);
@@ -103,52 +127,39 @@ const AtlasHistory = (() => {
 
     /* ---------- actions */
 
-    const openEntry = async (entryId) => {
+    const deleteGroup = async (group) => {
+        if (!window.confirm(t("hist.deleteConfirm"))) return;
         try {
-            const response = await fetch(`/api/history/${entryId}`, { headers: authHeaders() });
-            const data = await response.json();
-            if (!data.success) throw new Error(data.error || "API error");
-            window.Atlas.displayStoredReport(data.data);
-        } catch (error) {
-            console.error("History entry load failed:", error);
-            window.alert("Could not load this history entry.");
-        }
-    };
-
-    const deleteEntry = async (entryId) => {
-        if (!window.confirm("Delete this report from history?")) return;
-        try {
-            const response = await fetch(`/api/history/${entryId}`, {
-                method: "DELETE",
-                headers: authHeaders(),
-            });
-            const data = await response.json();
-            if (data.success) {
-                allEntries = allEntries.filter((entry) => entry.id !== entryId);
-                render();
-            } else {
-                window.alert("Could not delete the entry.");
+            for (const entry of group.entries) {
+                await fetch(`/api/history/${entry.id}`, { method: "DELETE", headers: authHeaders() });
             }
+            const ids = new Set(group.entries.map((entry) => entry.id));
+            allEntries = allEntries.filter((entry) => !ids.has(entry.id));
+            render();
         } catch (error) {
             console.error("History delete failed:", error);
-            window.alert("Could not delete the entry.");
+            if (window.AtlasToast) AtlasToast.error(t("hist.deleteError"));
         }
     };
 
     const clearAll = async () => {
-        if (!window.confirm("Delete ALL history? This cannot be undone.")) return;
+        if (!window.confirm(t("hist.clearConfirm"))) return;
         try {
             const response = await fetch("/api/history", { method: "DELETE", headers: authHeaders() });
             const data = await response.json();
             if (data.success) {
                 allEntries = [];
                 render();
-            } else {
-                window.alert("Could not clear history.");
+                // Clearing history also clears automation runs server-side; refresh that view too.
+                if (window.AtlasAutomation && typeof window.AtlasAutomation.reloadRuns === "function") {
+                    window.AtlasAutomation.reloadRuns();
+                }
+            } else if (window.AtlasToast) {
+                AtlasToast.error(t("hist.clearError"));
             }
         } catch (error) {
             console.error("History clear failed:", error);
-            window.alert("Could not clear history.");
+            if (window.AtlasToast) AtlasToast.error(t("hist.clearError"));
         }
     };
 
@@ -176,11 +187,13 @@ const AtlasHistory = (() => {
         el("exportHistory").addEventListener("click", exportHistory);
         el("clearHistory").addEventListener("click", clearAll);
 
+        document.addEventListener("atlas:langchange", () => { if (loaded) render(); });
+
         loadHistory();
     };
 
-    // Register with the router: init on first open, refresh on later opens.
-    window.AtlasViews.register("history", init);
+    // init on first open; reload on every later open so the current session shows immediately.
+    window.AtlasViews.register("history", init, loadHistory);
 
     return {
         setCurrentHistoryId: (id) => { currentHistoryId = id; loaded = false; },

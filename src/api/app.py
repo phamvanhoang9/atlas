@@ -59,9 +59,9 @@ async def lifespan(app: FastAPI):
     async def _daily_job(trigger: str = "scheduled"):
         return await run_daily_report(deps.automation_store, deps.history_manager, trigger=trigger)
 
-    stale = deps.automation_store.fail_stale_running_runs()
+    stale = deps.automation_store.clear_stale_running_runs()
     if stale:
-        logger.warning("Marked %s interrupted automation run(s) as failed", stale)
+        logger.warning("Cleared %s interrupted automation run(s) on startup", stale)
 
     scheduler = AutomationScheduler(deps.automation_store, _daily_job)
     scheduler.start()

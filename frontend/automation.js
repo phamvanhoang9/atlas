@@ -4,13 +4,28 @@
  */
 
 const AtlasAutomation = (() => {
-    const { authHeaders, escapeHtml } = window.AtlasShared;
+    const { authHeaders, escapeHtml, locale } = window.AtlasShared;
+    const t = (k, v) => AtlasI18n.t(k, v);
 
     let pollTimer = null;
+    let lastRuns = null;
+    let lastEmailMode = null;
 
     const el = (id) => document.getElementById(id);
 
     /* ---------- config */
+
+    const applyEmailChip = () => {
+        const chip = el("emailModeChip");
+        if (!chip || !lastEmailMode) return;
+        if (lastEmailMode === "smtp") {
+            chip.textContent = t("auto.email.smtp");
+            chip.className = "chip smtp";
+        } else {
+            chip.textContent = t("auto.email.mock");
+            chip.className = "chip mock";
+        }
+    };
 
     const fillForm = (config) => {
         el("autoEnabled").checked = Boolean(config.enabled);
@@ -19,15 +34,8 @@ const AtlasAutomation = (() => {
         el("autoEmail").value = config.recipient_email || "";
         el("autoTopics").value = (config.topics || []).join("\n");
         el("autoDepth").value = config.depth || "deep";
-
-        const chip = el("emailModeChip");
-        if (config.email_mode === "smtp") {
-            chip.textContent = "Email delivery: SMTP (real)";
-            chip.className = "chip smtp";
-        } else {
-            chip.textContent = "Email delivery: mock — emails are logged, not sent. Set SMTP_* env vars to enable real delivery.";
-            chip.className = "chip mock";
-        }
+        lastEmailMode = config.email_mode || "mock";
+        applyEmailChip();
     };
 
     const setStatus = (message, ok = true) => {
@@ -47,7 +55,8 @@ const AtlasAutomation = (() => {
             fillForm(data.data);
         } catch (error) {
             console.error("Automation config load failed:", error);
-            setStatus("Could not load settings from the server.", false);
+            setStatus(t("auto.loadError"), false);
+            if (window.AtlasToast) AtlasToast.error(t("auto.loadError"));
         }
     };
 
@@ -59,7 +68,7 @@ const AtlasAutomation = (() => {
             timezone: el("autoTimezone").value.trim(),
             recipient_email: el("autoEmail").value.trim(),
             depth: el("autoDepth").value,
-            topics: el("autoTopics").value.split("\n").map((t) => t.trim()).filter(Boolean),
+            topics: el("autoTopics").value.split("\n").map((line) => line.trim()).filter(Boolean),
         };
         try {
             const response = await fetch("/api/automation/config", {
@@ -70,16 +79,17 @@ const AtlasAutomation = (() => {
             const data = await response.json();
             if (response.ok && data.success) {
                 fillForm(data.data);
-                setStatus("Settings saved.");
+                setStatus(t("auto.saved"));
             } else {
                 const detail = Array.isArray(data.detail)
                     ? data.detail.map((d) => d.msg).join("; ")
-                    : (data.detail || "Validation failed");
+                    : (data.detail || t("auto.saveError"));
                 setStatus(String(detail), false);
             }
         } catch (error) {
             console.error("Automation config save failed:", error);
-            setStatus("Could not save settings — server unreachable.", false);
+            setStatus(t("auto.saveError"), false);
+            if (window.AtlasToast) AtlasToast.error(t("auto.saveError"));
         }
     };
 
@@ -89,7 +99,7 @@ const AtlasAutomation = (() => {
         if (!isoString) return "—";
         const date = new Date(isoString);
         if (Number.isNaN(date.getTime())) return isoString;
-        return date.toLocaleString("en-GB", {
+        return date.toLocaleString(locale(), {
             day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
         });
     };
@@ -102,9 +112,10 @@ const AtlasAutomation = (() => {
     };
 
     const renderRuns = (runs) => {
+        lastRuns = runs;
         const list = el("runsList");
         if (!Array.isArray(runs) || runs.length === 0) {
-            list.innerHTML = '<p class="empty-note">No runs yet. Enable the schedule or click “Run now”.</p>';
+            list.innerHTML = `<p class="empty-note">${escapeHtml(t("auto.runs.empty"))}</p>`;
             return;
         }
         list.innerHTML = "";
@@ -126,7 +137,7 @@ const AtlasAutomation = (() => {
                 </div>
                 <div class="run-row2">
                     <span>trigger: ${escapeHtml(run.trigger || "scheduled")}${durationOf(run) ? ` · ${durationOf(run)}` : ""}</span>
-                    ${run.history_id ? '<a class="run-link view-report">View report</a>' : ""}
+                    ${run.history_id ? `<a class="run-link view-report">${escapeHtml(t("auto.viewReport"))}</a>` : ""}
                 </div>
                 ${run.error ? `<div class="run-error">${escapeHtml(run.error)}</div>` : ""}
             `;
@@ -156,21 +167,35 @@ const AtlasAutomation = (() => {
             return data.data;
         } catch (error) {
             console.error("Automation runs load failed:", error);
-            el("runsList").innerHTML = '<p class="empty-note">Could not load runs from the server.</p>';
+            el("runsList").innerHTML = `<p class="empty-note">${escapeHtml(t("auto.runsLoadError"))}</p>`;
             return [];
         }
     };
 
-    const pollWhileRunning = () => {
+    const toast = (type, key) => { if (window.AtlasToast) AtlasToast[type](t(key)); };
+
+    // Failed runs are not persisted, so a watched run that vanishes from the list
+    // (without ever appearing as "success") means it failed — surface that.
+    const pollWhileRunning = (watchId) => {
         if (pollTimer) clearInterval(pollTimer);
         let ticks = 0;
+        let sawRun = false;
         pollTimer = setInterval(async () => {
             ticks += 1;
             const runs = await loadRuns();
+            const watched = watchId ? runs.find((run) => run.id === watchId) : null;
+            if (watched) sawRun = true;
             const stillRunning = runs.some((run) => run.status === "running");
-            if (!stillRunning || ticks > 120) {     // stop after ~10 minutes
-                clearInterval(pollTimer);
-                pollTimer = null;
+
+            const stop = () => { clearInterval(pollTimer); pollTimer = null; };
+            if (watchId && watched && watched.status === "success") {
+                toast("success", "auto.runDone");
+                stop();
+            } else if (watchId && sawRun && !watched && !stillRunning) {
+                toast("warning", "auto.runFailed");   // our run was deleted => failed
+                stop();
+            } else if (!stillRunning || ticks > 120) {  // stop after ~10 minutes
+                stop();
             }
         }, 5000);
     };
@@ -185,17 +210,26 @@ const AtlasAutomation = (() => {
             });
             const data = await response.json();
             if (response.status === 409) {
-                setStatus("A run is already in progress.", false);
+                setStatus(t("auto.runInProgress"), false);
+                toast("warning", "auto.runInProgress");
             } else if (response.ok && data.success) {
-                setStatus("Run started — refreshing status below.");
+                setStatus(t("auto.runStarted"));
                 await loadRuns();
-                pollWhileRunning();
+                const runId = data.data && data.data.run_id;
+                if (runId) {
+                    pollWhileRunning(runId);
+                } else {
+                    // Fast-fail (e.g. no recipient email): the run failed before we could track it.
+                    toast("warning", "auto.runFailed");
+                }
             } else {
-                setStatus(String(data.detail || "Could not start the run."), false);
+                setStatus(String(data.detail || t("auto.runError")), false);
+                toast("error", "auto.runError");
             }
         } catch (error) {
             console.error("Manual run failed:", error);
-            setStatus("Could not start the run — server unreachable.", false);
+            setStatus(t("auto.runUnreachable"), false);
+            toast("error", "auto.runUnreachable");
         } finally {
             setTimeout(() => { button.disabled = false; }, 2000);
         }
@@ -207,13 +241,20 @@ const AtlasAutomation = (() => {
         el("automationForm").addEventListener("submit", saveConfig);
         el("runNow").addEventListener("click", runNow);
         el("refreshRuns").addEventListener("click", loadRuns);
+        document.addEventListener("atlas:langchange", () => {
+            applyEmailChip();
+            if (lastRuns) renderRuns(lastRuns);
+        });
         loadConfig();
         loadRuns();
     };
 
-    window.AtlasViews.register("automation", init);
+    window.AtlasViews.register("automation", init, loadRuns);
 
-    return { reload: () => { loadConfig(); loadRuns(); } };
+    return {
+        reload: () => { loadConfig(); loadRuns(); },
+        reloadRuns: () => { loadRuns(); },
+    };
 })();
 
 window.AtlasAutomation = AtlasAutomation;

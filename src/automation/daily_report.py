@@ -2,7 +2,9 @@
 
 Runs a deep-research-grade job over the last 24 hours of AI developments,
 saves it to history (kind="daily_report"), and emails it with safe fallbacks.
-The job never raises: every outcome is recorded in the automation run row.
+The job never raises. A successful run is kept as an automation run row linked
+to its history entry; a failed run leaves no row behind (the reason is logged
+and returned) so "Recent runs" only ever mirrors the daily reports that exist.
 """
 
 from __future__ import annotations
@@ -73,12 +75,21 @@ async def run_daily_report(
     run_id = store.create_run(trigger)
     config = store.get_config()
 
+    def _fail(error_log: str) -> dict[str, Any]:
+        """A failed run leaves no row behind — Recent runs only shows real reports.
+        The reason is logged and returned so callers/UI can surface it."""
+        now = datetime.now(timezone.utc).isoformat()
+        store.delete_run(run_id)
+        return {
+            "id": run_id, "trigger": trigger, "started_at": now, "finished_at": now,
+            "status": "failed", "email_status": "skipped", "error_log": error_log,
+            "history_id": "",
+        }
+
     ok, reason = config_is_complete(config)
     if not ok:
         logger.warning("Daily report run skipped: %s", reason)
-        store.finish_run(run_id, status="failed", email_status="skipped",
-                         error_log=f"Configuration incomplete: {reason}")
-        return store.get_run(run_id)
+        return _fail(f"Configuration incomplete: {reason}")
 
     date_label = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     query = build_daily_query(config.get("topics", []), date_label)
@@ -93,17 +104,15 @@ async def run_daily_report(
 
         researcher = researcher_factory(query, mode)
         report = await researcher.run()
-    except Exception as exc:  # noqa: BLE001 — job boundary: every failure must land in the run row
+    except Exception as exc:  # noqa: BLE001 — job boundary: every failure must be captured
         error = f"{type(exc).__name__}: {exc}"
         logger.error("Daily report research failed: %s\n%s", error, traceback.format_exc())
-        store.finish_run(run_id, status="failed", email_status="skipped", error_log=error)
-        return store.get_run(run_id)
+        return _fail(error)
 
     if not report or len(report.strip()) < 200:
         error = f"Report too short or empty ({len(report or '')} chars); email not sent"
         logger.warning("Daily report run produced insufficient output: %s", error)
-        store.finish_run(run_id, status="failed", email_status="skipped", error_log=error)
-        return store.get_run(run_id)
+        return _fail(error)
 
     history_id = ""
     try:
