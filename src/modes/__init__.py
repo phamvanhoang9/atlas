@@ -3,7 +3,6 @@
 from src.modes.registry import (
     CANONICAL_MODE_IDS,
     DEEP,
-    LEGACY_MODE_ALIASES,
     MODES,
     QUICK,
     RESEARCH,
@@ -16,7 +15,6 @@ from src.modes.registry import (
 __all__ = [
     "CANONICAL_MODE_IDS",
     "DEEP",
-    "LEGACY_MODE_ALIASES",
     "MODES",
     "QUICK",
     "RESEARCH",

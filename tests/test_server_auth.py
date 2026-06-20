@@ -78,7 +78,7 @@ def test_websocket_user_flow_sample_without_external_api(monkeypatch):
     client = TestClient(app)
 
     with client.websocket_connect("/ws") as websocket:
-        websocket.send_text('start {"task": "Transformer là gì?", "report_type": "hỏi đáp"}')
+        websocket.send_text('start {"task": "Transformer là gì?", "report_type": "quick"}')
         first = websocket.receive_json()
         second = websocket.receive_json()
         third = websocket.receive_json()

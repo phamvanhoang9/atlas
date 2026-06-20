@@ -1,9 +1,8 @@
 """Mode-specific runtime profile overrides.
 
-Keys are canonical mode ids (``quick`` / ``research`` / ``deep``); legacy
-Vietnamese mode strings are kept as deprecated aliases pointing at the same
-profile objects (decision D-004). Resolution happens via
-``src.modes.normalize_mode`` in ``Config.apply_mode_config``.
+Keys are canonical mode ids (``quick`` / ``research`` / ``deep``, decision
+D-004). Resolution happens via ``src.modes.normalize_mode`` in
+``Config.apply_mode_config``.
 """
 
 _QUICK_PROFILE = {
@@ -43,8 +42,4 @@ MODE_CONFIGS = {
     "quick": _QUICK_PROFILE,
     "research": _RESEARCH_PROFILE,
     "deep": _DEEP_PROFILE,
-    # Deprecated aliases (legacy product modes) — same objects, not copies.
-    "hỏi đáp": _QUICK_PROFILE,
-    "đề xuất bài báo": _RESEARCH_PROFILE,
-    "phân tích": _DEEP_PROFILE,
 }

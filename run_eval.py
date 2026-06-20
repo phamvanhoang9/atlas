@@ -45,7 +45,7 @@ _MODE_QUERIES: dict[str, str] = {
     ),
 }
 
-# Canonical ids plus accepted shorthands and deprecated legacy ids (D-004).
+# Canonical ids plus accepted English shorthands (D-004).
 _MODE_ALIASES: dict[str, str] = {
     "quick": "quick",
     "research": "research",
@@ -54,10 +54,6 @@ _MODE_ALIASES: dict[str, str] = {
     "qa": "quick",
     "paper": "research",
     "analysis": "deep",
-    # Deprecated Vietnamese mode ids
-    "hỏi đáp": "quick",
-    "đề xuất bài báo": "research",
-    "phân tích": "deep",
 }
 
 

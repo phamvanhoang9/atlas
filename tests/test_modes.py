@@ -1,4 +1,4 @@
-"""Tests for the canonical mode registry and legacy alias handling."""
+"""Tests for the canonical mode registry."""
 
 from unittest.mock import MagicMock, patch
 
@@ -7,7 +7,6 @@ from src.llm.router import route_model
 from src.modes import (
     CANONICAL_MODE_IDS,
     DEEP,
-    LEGACY_MODE_ALIASES,
     MODES,
     QUICK,
     RESEARCH,
@@ -23,10 +22,14 @@ def test_canonical_modes_are_registered() -> None:
         assert MODES[mode_id].id == mode_id
 
 
-def test_legacy_aliases_normalize_to_canonical_ids() -> None:
-    assert normalize_mode("hỏi đáp") == QUICK
+def test_legacy_vn_mode_ids_no_longer_resolve() -> None:
+    # The old Vietnamese product mode strings were retired (decision D-004);
+    # they must now fall through to the default like any unknown string.
+    assert normalize_mode("hỏi đáp") == RESEARCH
     assert normalize_mode("đề xuất bài báo") == RESEARCH
-    assert normalize_mode("phân tích") == DEEP
+    assert normalize_mode("phân tích") == RESEARCH
+    assert not is_known_mode("hỏi đáp")
+    assert not is_known_mode("phân tích")
 
 
 def test_canonical_ids_normalize_to_themselves() -> None:
@@ -43,8 +46,6 @@ def test_unknown_mode_falls_back_to_default() -> None:
 def test_is_known_mode() -> None:
     for mode_id in CANONICAL_MODE_IDS:
         assert is_known_mode(mode_id)
-    for alias in LEGACY_MODE_ALIASES:
-        assert is_known_mode(alias)
     assert not is_known_mode("pizza")
     assert not is_known_mode("")
     assert not is_known_mode(None)
@@ -64,12 +65,12 @@ def test_mode_specs_have_distinct_behavior() -> None:
     assert deep.url_report_template != deep.report_template
 
 
-def test_get_mode_spec_accepts_aliases() -> None:
-    assert get_mode_spec("phân tích") is MODES[DEEP]
+def test_get_mode_spec_falls_back_for_unknown_strings() -> None:
+    assert get_mode_spec("phân tích") is MODES[RESEARCH]
     assert get_mode_spec("deep") is MODES[DEEP]
 
 
-def test_apply_mode_config_accepts_canonical_and_legacy_ids() -> None:
+def test_apply_mode_config_accepts_canonical_ids() -> None:
     with patch("os.path.exists", return_value=True), patch("builtins.open", MagicMock()):
         with patch("json.load", return_value={}):
             config = Config()
@@ -81,11 +82,6 @@ def test_apply_mode_config_accepts_canonical_and_legacy_ids() -> None:
             config.apply_mode_config("deep")
             assert config.max_iterations == 5
             assert config.total_words == 3000
-
-            # Legacy alias hits the same profile as its canonical id.
-            config.apply_mode_config("hỏi đáp")
-            assert config.max_iterations == 1
-            assert config.total_words == 700
 
 
 def test_mode_profiles_scale_with_depth() -> None:
@@ -102,7 +98,6 @@ def test_mode_profiles_scale_with_depth() -> None:
 
 def test_route_model_upgrades_deep_mode() -> None:
     assert route_model("deep", "gpt-4o-mini", "openai") == "gpt-4o"
-    assert route_model("phân tích", "gpt-4o-mini", "openai") == "gpt-4o"
     assert route_model("deep", "gemini-1.5-flash", "google") == "gemini-1.5-pro"
 
     # Simpler modes keep the requested (cheap) model.

@@ -38,8 +38,9 @@ mechanics inspectable:
   suggested AI-angle reframe, instead of a confident off-domain hallucination.
 - **Daily AI intelligence automation** — a scheduler runs a deep research pass over
   your topics every morning and emails the report (SMTP, with a mock mode for dev).
-- **Measured, not vibes** — an offline deterministic benchmark plus an online
-  LLM-judge evaluation (RAG triad, citation coverage, refusal accuracy) gate quality.
+- **Measured, not vibes** — an online LLM-judge evaluation harness (RAGAS-based
+  RAG triad, citation coverage, refusal accuracy) scores every run via
+  `run_eval.py` or `/api/evaluation/*`.
 
 ## The three research modes
 
@@ -48,9 +49,6 @@ mechanics inspectable:
 | **Quick Answer** (`quick`) | Fast, cited answer to a direct question |
 | **Research** (`research`) | Structured report grounded in papers & official sources |
 | **Deep Research** (`deep`) | Multi-step analysis with impact assessment and confidence levels; paste URLs to deep-dive specific sources |
-
-Legacy Vietnamese mode ids (`hỏi đáp`, `đề xuất bài báo`, `phân tích`) are accepted
-as deprecated aliases so old history entries keep working.
 
 ## Workflow
 
@@ -74,7 +72,7 @@ flowchart LR
 ## Quick start
 
 ```bash
-git clone <your-repo-url> && cd ATLAS
+git clone https://github.com/phamvanhoang9/atlas.git && cd atlas
 python -m venv .venv
 # Windows: .\.venv\Scripts\Activate.ps1   |   macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
@@ -92,24 +90,21 @@ Open http://127.0.0.1:8000 — the app has three views:
 - **History** — every chat report and daily intelligence report, filterable and
   searchable.
 
-Sample outputs: [docs/samples/quick-answer-live-sample.md](docs/samples/quick-answer-live-sample.md)
-(real unedited run) and [docs/samples/research-mode-sample.md](docs/samples/research-mode-sample.md)
-(deterministic pipeline demo with the ranking table).
-
 ## Daily AI intelligence
 
 Configure once in the **Automation** view (or via REST):
 
 ```text
-GET/PUT /api/automation/config     # enabled, time, timezone, email, topics, depth
-POST    /api/automation/run        # run now
-GET     /api/automation/runs       # run history with status + email delivery
+GET/PUT /api/automation/config       # enabled, time, timezone, email, topics, depth
+POST    /api/automation/run          # run now
+GET     /api/automation/runs         # run history with status + email delivery
+GET     /api/automation/runs/{id}    # single run detail
 ```
 
 Email is sent via SMTP (`SMTP_*` env vars); without credentials ATLAS uses a
 **mock mode** that logs the email and records `email_status="mocked"` — clearly
-shown in the UI. The scheduler is in-process: run **one** replica (see
-[docs/deployment.md](docs/deployment.md)).
+shown in the UI. The scheduler runs in-process on a tick loop, so run **only one
+replica** — a second instance would race to send the same daily email.
 
 ## Configuration
 
@@ -138,22 +133,23 @@ Full annotated list in [.env.example](.env.example).
 | `WS /ws` | Research job + streaming (`logs`, `sources`, `report`, `refusal`, `quality_check`, `suggested_questions`, `evaluation`, `path`) |
 | `GET/DELETE /api/history…` | History list/entry/search/export/stats/clear |
 | `GET/PUT/POST /api/automation/…` | Automation config, manual run, run history |
+| `POST/GET /api/evaluation/…` | Run/fetch a RAGAS evaluation for a query or a stored history entry |
 
 WS request: `start {"task": "...", "report_type": "quick|research|deep"}`.
 Auth (when enabled): `Authorization: Bearer <token>` or `?token=<token>`.
 
-## Tests, benchmark, evaluation
+## Tests and evaluation
 
 ```bash
-python -m pytest                  # full suite (152 tests)
-python -m ruff check src tests scripts main.py
-python run_benchmark.py           # offline deterministic eval benchmark (no API keys)
-python run_eval.py quick          # full online pipeline + LLM-judge evaluation
+python -m pytest                  # full suite (165 tests)
+ruff check src tests main.py      # lint
+python run_eval.py quick          # full online pipeline + LLM-judge (RAGAS) evaluation
+python run_eval.py --all          # benchmark all 3 modes
 ```
 
-How the trust and evaluation systems work:
-[docs/research-system.md](docs/research-system.md) ·
-[docs/evaluation.md](docs/evaluation.md)
+The evaluation logic itself lives in `src/quality/evaluation/` (RAGAS adapter,
+retrieval/generation/refusal metrics) and is exercised both by `run_eval.py`
+and the `/api/evaluation/*` REST routes — see the API surface table above.
 
 ## Docker
 
@@ -162,26 +158,15 @@ docker compose up -d --build                          # development
 docker compose -f docker-compose.prod.yml up -d --build   # production (localhost-bound; put TLS proxy in front)
 ```
 
-Deployment guide (proxy config, env vars, backups, single-replica constraint):
-[docs/deployment.md](docs/deployment.md) · Security model: [docs/security.md](docs/security.md)
-
-## Documentation
-
-| Doc | Contents |
-| --- | --- |
-| [docs/user-guide.md](docs/user-guide.md) | Using the three modes, automation, and history |
-| [docs/research-system.md](docs/research-system.md) | Source taxonomy, citation system, trust pipeline |
-| [docs/evaluation.md](docs/evaluation.md) | Metrics, thresholds, benchmark design |
-| [docs/architecture.md](docs/architecture.md) | System design |
-| [docs/deployment.md](docs/deployment.md) / [docs/security.md](docs/security.md) | Running it for real |
-| [docs/roadmap.md](docs/roadmap.md) | What's next |
-| [docs/prd.md](docs/prd.md) / [docs/product.md](docs/product.md) | Product definition |
+The production compose file binds to localhost only — put a TLS-terminating
+reverse proxy in front before exposing it publicly. Run a single container
+instance (see the scheduler note above).
 
 ## Development
 
 ```bash
 python -m compileall -q src main.py
-ruff check src tests scripts main.py
+ruff check src tests main.py
 python -m pytest
 ```
 
@@ -190,15 +175,6 @@ node behavior in `src/agents`, modes in `src/modes`, prompts in YAML under
 `src/prompts/templates` (never hard-coded), source quality in `src/quality`,
 automation in `src/automation`. Add tests for behavior changes; never commit
 `.env`, `.atlas_data/`, `.atlas_cache/`, or `outputs/`.
-
-## Known limitations
-
-- Inline citation *numbering* trusts the LLM (anchors and URLs are system-built;
-  a claim can cite the wrong real source). Measured by the evaluation layer;
-  runtime NLI checking is on the roadmap.
-- Daily report quality depends on search quality for the day.
-- Single-replica scheduler; no rate limiting (front with a proxy);
-  single shared auth token. See [docs/security.md](docs/security.md) §6.
 
 ## Acknowledgements
 

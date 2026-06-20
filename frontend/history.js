@@ -17,11 +17,9 @@ const AtlasHistory = (() => {
 
     const MODE_LABEL_KEYS = {
         quick: "mode.quick", research: "mode.research", deep: "mode.deep",
-        "hỏi đáp": "mode.quick", "đề xuất bài báo": "mode.research", "phân tích": "mode.deep",
     };
     const MODE_CLASSES = {
         quick: "quick", research: "research", deep: "deep",
-        "hỏi đáp": "quick", "đề xuất bài báo": "research", "phân tích": "deep",
     };
 
     /* ---------- data */

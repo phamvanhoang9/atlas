@@ -35,11 +35,11 @@ def test_report_prompt_uses_yaml_template() -> None:
     assert "## Sources" in prompt
 
 
-def test_report_prompt_accepts_legacy_mode_alias() -> None:
-    legacy = get_report_by_type("hỏi đáp")("q", ["ctx"], "markdown", 500)
-    canonical = get_report_by_type("quick")("q", ["ctx"], "markdown", 500)
+def test_report_prompt_falls_back_for_unknown_mode_string() -> None:
+    unknown = get_report_by_type("hỏi đáp")("q", ["ctx"], "markdown", 500)
+    research = get_report_by_type("research")("q", ["ctx"], "markdown", 500)
 
-    assert legacy == canonical
+    assert unknown == research
 
 
 def test_deep_mode_with_urls_uses_source_analysis_template() -> None:

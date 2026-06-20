@@ -219,7 +219,7 @@ Agentic browsers need prompt-injection checks [1].
     )
     state = {
         "query": "Agent web security",
-        "report_type": "hỏi đáp",
+        "report_type": "quick",
         "source_urls": [],
         "agent": "researcher",
         "agent_role": "Researcher",

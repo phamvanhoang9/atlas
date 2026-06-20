@@ -1,10 +1,7 @@
-"""Mode registry — canonical research modes and legacy alias handling.
+"""Mode registry — canonical research modes.
 
 Canonical mode ids are the stable technical contract (PRD §5, decision D-004):
 ``quick`` (Quick Answer), ``research`` (Research), ``deep`` (Deep Research).
-
-Legacy Vietnamese mode strings remain accepted as deprecated aliases so stored
-history entries and in-flight clients keep working during the migration.
 """
 
 from __future__ import annotations
@@ -17,13 +14,6 @@ RESEARCH = "research"
 DEEP = "deep"
 
 CANONICAL_MODE_IDS: tuple[str, ...] = (QUICK, RESEARCH, DEEP)
-
-#: Deprecated aliases (old product modes) → canonical ids.
-LEGACY_MODE_ALIASES: dict[str, str] = {
-    "hỏi đáp": QUICK,
-    "đề xuất bài báo": RESEARCH,
-    "phân tích": DEEP,
-}
 
 
 @dataclass(frozen=True)
@@ -96,23 +86,19 @@ MODES: dict[str, ModeSpec] = {
 
 
 def is_known_mode(mode: str | None) -> bool:
-    """Return True when *mode* is a canonical id or a known legacy alias."""
-    if not mode:
-        return False
-    return mode in MODES or mode in LEGACY_MODE_ALIASES
+    """Return True when *mode* is a canonical mode id."""
+    return bool(mode) and mode in MODES
 
 
 def normalize_mode(mode: str | None, default: str = RESEARCH) -> str:
-    """Map any accepted mode string to its canonical id.
+    """Return *mode* if it is a canonical id, else *default*.
 
     Unknown values fall back to *default* so internal report_type values that
     predate the registry (e.g. "research_report") degrade gracefully.
     """
-    if not mode:
-        return default
     if mode in MODES:
         return mode
-    return LEGACY_MODE_ALIASES.get(mode, default)
+    return default
 
 
 def get_mode_spec(mode: str | None) -> ModeSpec:

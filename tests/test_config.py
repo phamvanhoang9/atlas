@@ -66,14 +66,14 @@ def test_apply_mode_config():
     with patch("os.path.exists", return_value=True), patch("builtins.open", MagicMock()):
         with patch("json.load", return_value={}):
             config = Config()
-            
-            # Test 'hỏi đáp' mode
-            config.apply_mode_config("hỏi đáp")
+
+            # Test 'quick' mode
+            config.apply_mode_config("quick")
             assert config.max_iterations == 1
             assert config.total_words == 700
-            
-            # Test 'phân tích' mode
-            config.apply_mode_config("phân tích")
+
+            # Test 'deep' mode
+            config.apply_mode_config("deep")
             assert config.max_iterations == 5
             assert config.total_words == 3000
 

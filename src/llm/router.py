@@ -17,8 +17,8 @@ def route_model(
     """Determine the optimal model based on the task type.
 
     Args:
-        report_type: The report type (mode) being generated. Canonical ids and
-            legacy aliases are both accepted (see src.modes.registry).
+        report_type: The canonical mode id being generated for (see
+            src.modes.registry).
         requested_model: The default model from configuration
         provider: The LLM provider (openai, google)
         override_model: An explicit override (if any)

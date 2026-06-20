@@ -149,8 +149,8 @@ class Config:
         Apply mode-specific configuration overrides based on report type
 
         Args:
-            report_type: The report type (mode) to configure for. Canonical ids
-                and legacy aliases are both accepted (see src.modes.registry).
+            report_type: The canonical mode id to configure for (see
+                src.modes.registry).
         """
         from src.modes import get_mode_spec, is_known_mode
 
