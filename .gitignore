@@ -1,15 +1,9 @@
-# Python virtual environments
-.venv/
-venv/
-env/
-ENV/
-*.pyc
+# Python
 __pycache__/
+*.py[cod]
 *.pyo
 *.pyd
 .Python
-
-# Python distribution / packaging
 build/
 develop-eggs/
 dist/
@@ -28,18 +22,12 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+.venv/
+venv/
+env/
+ENV/
 
-# IDE and editor files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-*.sublime-project
-*.sublime-workspace
-
-# Testing and development
+# Testing
 .pytest_cache/
 .pytest_tmp/
 pytest_tmp_work/
@@ -54,12 +42,28 @@ coverage.xml
 *.cover
 .hypothesis/
 
-# CI/CD
-.gitlab-ci.yml
-.travis.yml
-Jenkinsfile
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
 
-# Environment and configuration (use env vars instead)
+# OS
+Thumbs.db
+Desktop.ini
+
+# Logs and temp files
+*.log
+logs/
+*.tmp
+*.temp
+.cache/
+
+# Secrets and local config
 .env
 .env.*
 !.env.example
@@ -75,49 +79,47 @@ config.local.json
 secrets/
 .secrets/
 
-# Logs and temporary files
-*.log
-logs/
-*.tmp
-*.temp
-.cache/
-.atlas_cache/
-.atlas_data/
-
-# OS-specific files
-Thumbs.db
-Desktop.ini
-
-# Project-specific data files
-config.json
-!config.json.example
-history.json
-outputs/
-
-# Project-specific exclusions
-outputs/*.md
-outputs/*.pdf
-learning/
-
-# Large binary files (if any)
+# Large/binary data files
 *.sqlite
 *.sqlite3
 *.db
 *.pkl
 *.pickle
-
-# Jupyter notebooks
 *.ipynb
 .ipynb_checkpoints/
 
-# Node modules
+# Node
 node_modules/
 npm-debug.log
 yarn-error.log
 
-AGENTS.md
-CLAUDE.md
-.claude/
-.codex/
-docs/agent-memory/
+# CI configs not used in this repo
+.gitlab-ci.yml
+.travis.yml
+Jenkinsfile
+
+# Project: local data, caches, and generated artifacts
+.atlas_cache/
+.atlas_data/
 .codegraph/
+.gitnexus/
+.ruff_cache/
+.superpowers/
+outputs/
+history.json
+learning/
+evals/
+scripts/
+visualization/
+
+# Project: local-only config and docs
+.claude/
+CLAUDE.md
+AGENTS.md
+config.json
+!config.json.example
+docs/agent-memory/
+docs/superpowers/
+
+# Project: local-only entry points
+run_benchmark.py
