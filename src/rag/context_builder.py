@@ -45,6 +45,27 @@ def build_mode_context(
     This path is used for deep analysis and as a robust fallback when semantic
     compression is too expensive or returns no chunks. It favors reliability:
     keep the best ranked sources, preserve URLs, and cap total context size.
+
+    Args:
+      documents: Candidate source documents, each expected to provide
+        `raw_content`, `title`/`url`, and optionally `quality_score` and
+        `source_category_label`.
+      query: The research query the context is being assembled for; included
+        in each source section for downstream relevance grounding.
+      report_type: Mode identifier (e.g. "quick", "research", "deep") used to
+        select default document/character caps when explicit overrides are
+        not provided.
+      max_documents: Maximum number of top-ranked documents to include.
+        Defaults to a mode-specific value when omitted.
+      max_chars_per_document: Maximum characters kept per document before
+        truncation. Defaults to a mode-specific value when omitted.
+      max_total_chars: Maximum total characters across all sections.
+        Defaults to a mode-specific value when omitted.
+
+    Returns:
+      A string of newline-separated source sections (each with title, URL,
+      quality score, and clipped content), or an empty string if no
+      documents have usable content.
     """
     if not documents:
         return ""

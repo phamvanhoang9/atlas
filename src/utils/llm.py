@@ -1,3 +1,5 @@
+"""LLM provider lookup and chat completion with retry handling."""
+
 from __future__ import annotations
 
 import asyncio
@@ -43,6 +45,18 @@ RETRY_DELAYS_SECONDS = (2.0, 4.0, 8.0)
 
 
 def get_llm(llm_provider: str, **kwargs: Any) -> Any:
+    """Instantiate the provider class for *llm_provider*.
+
+    Args:
+      llm_provider: Provider id, e.g. ``"openai"`` or ``"google"``.
+      **kwargs: Forwarded to the provider class constructor.
+
+    Returns:
+      An initialized provider instance.
+
+    Raises:
+      ValueError: If *llm_provider* is not a supported provider id.
+    """
     match llm_provider:
         case "openai":
             from ..llm_provider import OpenAIProvider
@@ -68,8 +82,29 @@ async def create_chat_completion(
     websocket: WebSocket | None = None,
     llm_kwargs: dict[str, Any] | None = None,
 ) -> str:
-    """
-    Create a chat completion with retry handling for transient provider failures.
+    """Create a chat completion with retry handling for transient provider failures.
+
+    Retries on a fixed set of transient network/provider exceptions
+    (``RETRYABLE_EXCEPTIONS``) using the backoff schedule in
+    ``RETRY_DELAYS_SECONDS``, then gives up.
+
+    Args:
+      messages: Chat messages in OpenAI-style ``{"role", "content"}`` form.
+      model: Model identifier; required.
+      temperature: Sampling temperature.
+      max_tokens: Optional cap on generated tokens; must be <= 12001.
+      llm_provider: Provider id (e.g. ``"openai"``, ``"google"``); required.
+      stream: Whether to stream tokens to *websocket* as they arrive.
+      websocket: Optional websocket to stream tokens to.
+      llm_kwargs: Extra keyword arguments forwarded to the provider constructor.
+
+    Returns:
+      The completed chat response text.
+
+    Raises:
+      ValueError: If *model* or *llm_provider* is ``None``, or *max_tokens*
+        exceeds 12001.
+      RuntimeError: If all retry attempts are exhausted.
     """
     if model is None:
         raise ValueError("Model cannot be None")

@@ -1,3 +1,7 @@
+"""Tests for `_ensure_report_structure` and `generate_report_node`: citation
+linking, reference-section normalization, and the websocket report stream.
+"""
+
 from types import SimpleNamespace
 
 import pytest
@@ -188,6 +192,8 @@ Agents are evolving rapidly [1][2].
 @pytest.mark.asyncio
 async def test_generate_report_node_sends_final_normalized_replacement(monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeWebSocket:
+        """Records every JSON payload sent, in order, for later assertion."""
+
         def __init__(self) -> None:
             self.messages: list[dict[str, object]] = []
 

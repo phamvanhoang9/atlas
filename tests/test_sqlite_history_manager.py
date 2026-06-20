@@ -1,3 +1,5 @@
+"""Tests for `SQLiteHistoryManager`: CRUD, search, stats, and session grouping."""
+
 import uuid
 from pathlib import Path
 

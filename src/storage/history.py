@@ -1,3 +1,11 @@
+"""SQLite-backed storage for research history entries.
+
+`SQLiteHistoryManager` persists research queries, reports, and metadata
+(mode, evaluation results, PDF path) to a local SQLite database, and
+provides CRUD, full-text search, export, and aggregate statistics over
+that history.
+"""
+
 from __future__ import annotations
 
 import json
@@ -13,6 +21,12 @@ class SQLiteHistoryManager:
     """SQLite-backed research history for production deployments."""
 
     def __init__(self, db_path: str = ".atlas_data/history.sqlite") -> None:
+        """Open (creating if needed) the history database and ensure its schema.
+
+        Args:
+          db_path: Filesystem path to the SQLite database file. Parent
+            directories are created automatically.
+        """
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = Lock()
@@ -40,6 +54,8 @@ class SQLiteHistoryManager:
                 )
                 """
             )
+            # Older databases may predate these columns; add them in place so
+            # existing history rows survive upgrades instead of requiring a migration.
             columns = {
                 row["name"]
                 for row in connection.execute("PRAGMA table_info(history)").fetchall()
@@ -85,6 +101,23 @@ class SQLiteHistoryManager:
         kind: str = "chat",
         session_id: str = "",
     ) -> str:
+        """Insert a new history entry.
+
+        Args:
+          query: The research query text.
+          mode: The research mode id (e.g. `quick`, `research`, `deep`).
+          report: The generated report text, used to derive the preview.
+          suggested_questions: Follow-up questions to store alongside the
+            entry. Defaults to an empty list.
+          pdf_path: Filesystem path to the exported PDF, if any.
+          evaluation_result: RAGAS evaluation metrics to store, if any.
+            Defaults to an empty dict.
+          kind: The entry kind (e.g. `chat`, `automation`).
+          session_id: Identifier linking this entry to a chat session.
+
+        Returns:
+          The newly generated entry id (a UUID4 string).
+        """
         entry_id = str(uuid.uuid4())
         preview = self._generate_preview(report)
         with self._lock, self._connect() as connection:
@@ -119,6 +152,18 @@ class SQLiteHistoryManager:
         pdf_path: Optional[str] = None,
         evaluation_result: Optional[dict[str, Any]] = None,
     ) -> None:
+        """Update fields on an existing history entry, leaving others unchanged.
+
+        Args:
+          entry_id: The id of the entry to update.
+          report: New report text. Also regenerates the stored preview.
+          suggested_questions: New list of suggested follow-up questions.
+          pdf_path: New PDF export path.
+          evaluation_result: New evaluation metrics.
+
+        Any argument left as `None` keeps the entry's existing value. If
+        no entry with `entry_id` exists, this is a no-op.
+        """
         existing = self.get_entry(entry_id)
         if existing is None:
             return
@@ -148,6 +193,16 @@ class SQLiteHistoryManager:
             )
 
     def get_all_entries(self, limit: Optional[int] = None, kind: Optional[str] = None) -> list[dict[str, Any]]:
+        """List history entries, newest first.
+
+        Args:
+          limit: Maximum number of entries to return. Returns all entries
+            if `None`.
+          kind: If given, only return entries matching this `kind`.
+
+        Returns:
+          A list of entry dicts ordered by timestamp descending.
+        """
         sql = "SELECT * FROM history"
         parameters: list[Any] = []
         if kind is not None:
@@ -163,6 +218,14 @@ class SQLiteHistoryManager:
         return [self._row_to_entry(row) for row in rows]
 
     def get_entry(self, entry_id: str) -> Optional[dict[str, Any]]:
+        """Fetch a single history entry by id.
+
+        Args:
+          entry_id: The id of the entry to fetch.
+
+        Returns:
+          The entry dict, or `None` if no entry with that id exists.
+        """
         with self._connect() as connection:
             row = connection.execute("SELECT * FROM history WHERE id = ?", (entry_id,)).fetchone()
         if row is None:
@@ -170,15 +233,32 @@ class SQLiteHistoryManager:
         return self._row_to_entry(row)
 
     def delete_entry(self, entry_id: str) -> bool:
+        """Delete a single history entry by id.
+
+        Args:
+          entry_id: The id of the entry to delete.
+
+        Returns:
+          `True` if an entry was deleted, `False` if no entry matched.
+        """
         with self._lock, self._connect() as connection:
             cursor = connection.execute("DELETE FROM history WHERE id = ?", (entry_id,))
         return cursor.rowcount > 0
 
     def clear_all(self) -> None:
+        """Delete every history entry."""
         with self._lock, self._connect() as connection:
             connection.execute("DELETE FROM history")
 
     def search_entries(self, search_term: str) -> list[dict[str, Any]]:
+        """Full-text search over entry queries and reports.
+
+        Args:
+          search_term: The substring to search for (case-insensitive).
+
+        Returns:
+          Matching entries ordered by timestamp descending.
+        """
         needle = f"%{search_term.lower()}%"
         with self._connect() as connection:
             rows = connection.execute(
@@ -192,6 +272,12 @@ class SQLiteHistoryManager:
         return [self._row_to_entry(row) for row in rows]
 
     def export_to_json(self, output_path: str = "history_export.json") -> None:
+        """Write all history entries to a JSON file.
+
+        Args:
+          output_path: Destination file path. Parent directories are
+            created automatically.
+        """
         entries = self.get_all_entries()
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         Path(output_path).write_text(json.dumps(entries, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -206,6 +292,13 @@ class SQLiteHistoryManager:
         return preview
 
     def get_statistics(self) -> dict[str, Any]:
+        """Compute aggregate statistics over all history entries.
+
+        Returns:
+          A dict with `total_entries` (int), `by_mode` (counts keyed by
+          mode id), `oldest_entry` and `newest_entry` (timestamps, or
+          `None` if there are no entries).
+        """
         entries = self.get_all_entries()
         stats: dict[str, Any] = {
             "total_entries": len(entries),

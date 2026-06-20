@@ -1,3 +1,5 @@
+"""Optional cross-encoder reranking for retrieved documents."""
+
 from __future__ import annotations
 
 import logging
@@ -36,6 +38,21 @@ def _resolve_device() -> str:
 
 @dataclass
 class CrossEncoderReranker:
+    """Reranks retrieved documents by query relevance using a cross-encoder.
+
+    Lazily loads a `sentence_transformers.CrossEncoder` model on first use and
+    is a no-op (returns documents unchanged, in their original order) when
+    disabled, when the optional `sentence-transformers` dependency is
+    missing, or when model loading fails. Failures are cached for the
+    instance lifetime so subsequent calls don't retry a known-bad load.
+
+    Attributes:
+      model_name: HuggingFace model id to load for reranking.
+      enabled: Whether reranking is active; when False, `rerank_documents`
+        returns its input unchanged.
+      device: Torch device string ("cuda" or "cpu") the model runs on.
+    """
+
     model_name: str = DEFAULT_CROSS_ENCODER_MODEL
     enabled: bool = False
     device: str = field(default_factory=_resolve_device)
@@ -44,6 +61,7 @@ class CrossEncoderReranker:
 
     @classmethod
     def from_env(cls) -> "CrossEncoderReranker":
+        """Build a reranker configured from `CROSS_ENCODER_*` env vars."""
         return cls(
             model_name=os.getenv("CROSS_ENCODER_MODEL", DEFAULT_CROSS_ENCODER_MODEL),
             enabled=_env_flag("ENABLE_CROSS_ENCODER_RERANKING", False),
@@ -51,6 +69,7 @@ class CrossEncoderReranker:
         )
 
     def _load_model(self) -> Any | None:
+        """Lazily load and cache the CrossEncoder model, or None if unavailable."""
         if not self.enabled:
             return None
         if self._model is not None:
@@ -91,6 +110,22 @@ class CrossEncoderReranker:
         documents: Sequence[Any],
         top_k: int | None = None,
     ) -> list[Any]:
+        """Rerank documents by predicted relevance to the query.
+
+        Falls back to returning `documents` in their original order if
+        reranking is disabled, the model can't be loaded, or scoring fails.
+
+        Args:
+          query: The search query to score documents against.
+          documents: Candidate documents (LangChain `Document` objects or
+            dict-like objects with `raw_content`/`content`/`text`).
+          top_k: Maximum number of documents to return. Returns all
+            documents (reranked) when omitted.
+
+        Returns:
+          Documents sorted by descending relevance score, truncated to
+          `top_k` if given.
+        """
         docs = list(documents)
         if len(docs) <= 1:
             return docs

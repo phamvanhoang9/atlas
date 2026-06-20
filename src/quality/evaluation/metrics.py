@@ -1,3 +1,12 @@
+"""Shared, LLM-free building blocks for the evaluation metrics.
+
+Provides text normalization (tokenize/strip_accents), lexical similarity and
+coverage scoring used as fallbacks when no LLM judge is configured, claim
+extraction for faithfulness checks, JSON parsing of judge responses, and the
+DCG helper used by ranking metrics. Higher-level metric functions in
+generation_metrics.py and retrieval_metrics.py build on these primitives.
+"""
+
 from __future__ import annotations
 
 import json
@@ -40,10 +49,22 @@ _STOPWORDS = {
 
 
 def clamp(value: float, minimum: float = 0.0, maximum: float = 1.0) -> float:
+    """Clamp a value to the [minimum, maximum] range."""
     return max(minimum, min(maximum, value))
 
 
 def label_from_score(score: float | None, pass_threshold: float, warn_threshold: float | None = None) -> str:
+    """Map a numeric score to a "pass"/"warn"/"fail"/"skipped" label.
+
+    Args:
+      score: The metric score to label, or None if the metric was not computed.
+      pass_threshold: Minimum score for a "pass" label.
+      warn_threshold: Minimum score for a "warn" label. Defaults to 85% of
+        pass_threshold when omitted.
+
+    Returns:
+      "skipped" if score is None, otherwise "pass", "warn", or "fail".
+    """
     if score is None:
         return "skipped"
     warn = warn_threshold if warn_threshold is not None else pass_threshold * 0.85
@@ -55,16 +76,27 @@ def label_from_score(score: float | None, pass_threshold: float, warn_threshold:
 
 
 def normalize_label(value: Any, fallback: str) -> str:
+    """Coerce an arbitrary judge-supplied label into a known MetricLabel value.
+
+    Args:
+      value: The raw label value (e.g. from an LLM judge's JSON response).
+      fallback: The label to use when value isn't a recognized label string.
+
+    Returns:
+      One of "pass", "warn", "fail", "skipped", or fallback.
+    """
     label = str(value or "").strip().lower()
     return label if label in {"pass", "warn", "fail", "skipped"} else fallback
 
 
 def tokenize(text: str) -> list[str]:
+    """Lowercase, strip accents, and split text into tokens, dropping stopwords and single chars."""
     tokens = re.findall(r"[\w]+", strip_accents(text.lower()), flags=re.UNICODE)
     return [token for token in tokens if len(token) > 1 and token not in _STOPWORDS]
 
 
 def strip_accents(text: str) -> str:
+    """Replace Vietnamese accented characters with their unaccented ASCII equivalents."""
     replacements = {
         "à": "a",
         "á": "a",
@@ -138,6 +170,7 @@ def strip_accents(text: str) -> str:
 
 
 def lexical_similarity(left: str, right: str) -> float:
+    """Compute token-set F1 similarity between two texts (order-insensitive)."""
     left_tokens = set(tokenize(left))
     right_tokens = set(tokenize(right))
     if not left_tokens or not right_tokens:
@@ -151,6 +184,7 @@ def lexical_similarity(left: str, right: str) -> float:
 
 
 def max_similarity(text: str, candidates: Sequence[str]) -> float:
+    """Return the highest lexical_similarity between text and any candidate, or 0.0 if none."""
     if not candidates:
         return 0.0
     return max(lexical_similarity(text, candidate) for candidate in candidates)
@@ -204,6 +238,7 @@ def bilingual_query_coverage(query: str, context: str, threshold: float = 0.20) 
 
 
 def split_sentences(text: str) -> list[str]:
+    """Split text into sentences on sentence-ending punctuation or newlines."""
     normalized = re.sub(r"\s+", " ", text.strip())
     if not normalized:
         return []
@@ -212,6 +247,11 @@ def split_sentences(text: str) -> list[str]:
 
 
 def is_information_claim(sentence: str) -> bool:
+    """Check whether a sentence states factual information rather than social/filler text.
+
+    Short sentences, and sentences matching common conversational markers
+    (greetings, thanks, offers to help), are excluded.
+    """
     stripped = sentence.strip()
     if len(stripped) < 24:
         return False
@@ -233,6 +273,10 @@ def is_information_claim(sentence: str) -> bool:
 
 
 def extract_information_claims(response: str) -> list[str]:
+    """Split a response into sentences and return only those that state factual claims.
+
+    Markdown heading markers are stripped before the factual-claim check.
+    """
     claims: list[str] = []
     for sentence in split_sentences(response):
         sentence = re.sub(r"^#+\s*", "", sentence).strip()
@@ -242,6 +286,21 @@ def extract_information_claims(response: str) -> list[str]:
 
 
 def parse_json_object(raw: str) -> dict[str, Any]:
+    """Parse a JSON object out of raw LLM judge output, tolerating code fences and extra text.
+
+    Strips ```json fences if present; if direct parsing fails, falls back to
+    extracting the substring between the first "{" and the last "}".
+
+    Args:
+      raw: The raw text returned by the judge LLM.
+
+    Returns:
+      The parsed JSON object as a dict.
+
+    Raises:
+      json.JSONDecodeError: If no valid JSON object could be extracted.
+      ValueError: If the parsed JSON value is not an object.
+    """
     text = raw.strip()
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
@@ -260,6 +319,17 @@ def parse_json_object(raw: str) -> dict[str, Any]:
 
 
 async def maybe_call_judge(judge: JudgeCallable | None, prompt: str) -> dict[str, Any] | None:
+    """Call the judge callable with prompt and parse its JSON reply, if a judge is configured.
+
+    Args:
+      judge: A sync or async callable that returns the judge's raw text response,
+        or None if no LLM judge is configured.
+      prompt: The prompt to send to the judge.
+
+    Returns:
+      The parsed JSON response dict, or None if no judge was given or the
+      response could not be parsed as a JSON object.
+    """
     if judge is None:
         return None
     raw = judge(prompt)
@@ -279,6 +349,21 @@ def build_judge_prompt(
     contexts: Sequence[str] | None = None,
     claims: Sequence[str] | None = None,
 ) -> str:
+    """Render the LLM-judge prompt for a given evaluation task.
+
+    Uses the "evaluation_judge" prompt template when available, falling back
+    to a minimal inline prompt if the template registry returns None.
+
+    Args:
+      task: A short description of what the judge should score.
+      query: The user query being evaluated.
+      response: The generated response to judge, if applicable.
+      contexts: Retrieved context texts to include, if applicable.
+      claims: Extracted factual claims to include, if applicable.
+
+    Returns:
+      The fully rendered prompt string to send to the judge LLM.
+    """
     prompt = render_prompt(
         "evaluation_judge",
         {
@@ -300,4 +385,5 @@ def build_judge_prompt(
 
 
 def dcg(scores: Sequence[float]) -> float:
+    """Compute discounted cumulative gain over a ranked sequence of relevance scores."""
     return sum(score / math.log2(index + 2) for index, score in enumerate(scores))

@@ -1,3 +1,12 @@
+"""Retrieval-quality metrics: ranking metrics (recall/precision/nDCG) and context relevance.
+
+Ranking metrics (recall_at_k, precision_at_k, ndcg_at_k) are pure functions
+over ids and need ground-truth relevance to be meaningful; the *_metric
+wrappers return "skipped" MetricResults when that ground truth is absent.
+context_relevance_llm prefers an LLM judge, falling back to a bilingual
+lexical-coverage heuristic.
+"""
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -18,6 +27,7 @@ from src.quality.evaluation.schemas import EvaluationThresholds, MetricResult, R
 
 
 def recall_at_k(retrieved_ids: Sequence[str], relevant_ids: Sequence[str], k: int) -> float:
+    """Return the fraction of relevant_ids found within the top k retrieved_ids."""
     relevant = set(relevant_ids)
     if not relevant or k <= 0:
         return 0.0
@@ -26,6 +36,7 @@ def recall_at_k(retrieved_ids: Sequence[str], relevant_ids: Sequence[str], k: in
 
 
 def precision_at_k(retrieved_ids: Sequence[str], relevant_ids: Sequence[str], k: int) -> float:
+    """Return the fraction of the top k retrieved_ids that are relevant."""
     if k <= 0:
         return 0.0
     relevant = set(relevant_ids)
@@ -40,6 +51,18 @@ def ndcg_at_k(
     relevance_scores: dict[str, float] | Sequence[float],
     k: int,
 ) -> float:
+    """Compute normalized discounted cumulative gain at rank k.
+
+    Args:
+      retrieved_ids: The ranked list of retrieved item ids.
+      relevance_scores: Graded relevance per item id (dict), or a parallel
+        sequence of relevance scores aligned with retrieved_ids.
+      k: The rank cutoff.
+
+    Returns:
+      nDCG@k in [0, 1]; 0.0 if k <= 0, retrieved_ids is empty, or the ideal
+      DCG is 0 (no relevance signal).
+    """
     if k <= 0 or not retrieved_ids:
         return 0.0
     if isinstance(relevance_scores, dict):
@@ -60,6 +83,20 @@ def context_recall_from_ground_truth(
     *,
     similarity_threshold: float = 0.28,
 ) -> MetricResult:
+    """Score the fraction of ground-truth context snippets matched by retrieval.
+
+    A ground-truth snippet counts as matched if its lexical_similarity to
+    any retrieved context exceeds similarity_threshold.
+
+    Args:
+      retrieved_contexts: The contexts actually retrieved for the query.
+      ground_truth_context: The expected context snippets, if known.
+      similarity_threshold: Minimum lexical_similarity to count as a match.
+
+    Returns:
+      A MetricResult named "context_recall", "skipped" if no ground truth
+      was provided.
+    """
     if not ground_truth_context:
         return MetricResult(
             name="context_recall",
@@ -87,6 +124,12 @@ def context_recall_from_ground_truth(
 
 
 def deterministic_context_relevance(query: str, retrieved_contexts: Sequence[RetrievedContext]) -> float:
+    """Score how relevant retrieved_contexts are to query without an LLM, rank-weighted.
+
+    Each context's relevance is the max of lexical_similarity and
+    bilingual_query_coverage, then averaged with rank-based weighting
+    (1/(rank+1)) so earlier-ranked contexts count more.
+    """
     if not retrieved_contexts:
         return 0.0
     # Use bilingual_query_coverage so Vietnamese queries score positively against
@@ -107,6 +150,20 @@ async def context_relevance_llm(
     judge: JudgeCallable | None = None,
     thresholds: EvaluationThresholds | None = None,
 ) -> MetricResult:
+    """Score whether retrieved_contexts are relevant and sufficient for query.
+
+    Uses the LLM judge if one is configured and returns a usable score;
+    otherwise falls back to deterministic_context_relevance.
+
+    Args:
+      query: The user query.
+      retrieved_contexts: The contexts retrieved for the query.
+      judge: Optional LLM judge callable.
+      thresholds: Pass/warn thresholds; defaults to EvaluationThresholds().
+
+    Returns:
+      A MetricResult named "context_relevance".
+    """
     thresholds = thresholds or EvaluationThresholds()
     contexts = [context.text for context in retrieved_contexts]
     prompt = build_judge_prompt(
@@ -144,6 +201,7 @@ def context_precision_metric(
     k: int,
     thresholds: EvaluationThresholds | None = None,
 ) -> MetricResult:
+    """Wrap precision_at_k as a MetricResult, "skipped" if relevant_ids is absent."""
     thresholds = thresholds or EvaluationThresholds()
     if not relevant_ids:
         return MetricResult(
@@ -171,6 +229,7 @@ def recall_at_k_metric(
     k: int,
     thresholds: EvaluationThresholds | None = None,
 ) -> MetricResult:
+    """Wrap recall_at_k as a MetricResult, "skipped" if relevant_ids is absent."""
     thresholds = thresholds or EvaluationThresholds()
     if not relevant_ids:
         return MetricResult(
@@ -198,6 +257,7 @@ def ndcg_at_k_metric(
     k: int,
     thresholds: EvaluationThresholds | None = None,
 ) -> MetricResult:
+    """Wrap ndcg_at_k as a MetricResult, "skipped" if relevance_scores is absent."""
     thresholds = thresholds or EvaluationThresholds()
     if not relevance_scores:
         return MetricResult(
@@ -224,6 +284,15 @@ def noise_ratio_metric(
     *,
     relevance_threshold: float = 0.25,
 ) -> MetricResult:
+    """Score the fraction of retrieved_contexts that are off-topic ("noisy") for query.
+
+    A context counts as noisy when its bilingual_query_coverage against
+    query falls below relevance_threshold.
+
+    Returns:
+      A MetricResult named "noise_ratio"; higher scores mean more noise
+      (this metric is inverted when folded into an overall average).
+    """
     if not retrieved_contexts:
         return MetricResult(
             name="noise_ratio",

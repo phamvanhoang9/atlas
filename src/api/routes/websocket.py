@@ -21,7 +21,23 @@ router = APIRouter(tags=["websocket"])
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
-    """Run a research job over WebSocket and stream progress."""
+    """Run research jobs over a single WebSocket connection and stream progress.
+
+    Authenticates the socket, then loops accepting `"start<json>"` messages,
+    each describing one research job: it creates/reuses a history entry,
+    runs the LangGraph workflow via `deps.manager.start_streaming()`,
+    exports the report to PDF, and persists the final result. The loop
+    continues across multiple jobs until the client disconnects or an
+    unrecoverable error occurs.
+
+    Args:
+      websocket: The incoming WebSocket connection.
+
+    Note:
+      If `require_websocket_auth` fails, it has already accepted and
+      closed the socket with code 1008; this function simply returns
+      without further handling in that case.
+    """
     if not await require_websocket_auth(websocket):
         logger.warning("WebSocket auth rejected client=%s", websocket.client.host if websocket.client else "-")
         return
@@ -37,6 +53,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
             request_id = uuid.uuid4().hex[:8]
             start = time.perf_counter()
+            # Client sends "start " (5-char prefix + space) followed by the JSON payload.
             json_data = json.loads(data[6:])
             task = json_data.get("task")
             report_type = json_data.get("report_type")

@@ -1,3 +1,10 @@
+"""Tests for the embeddings memory layer: provider selection and caching.
+
+Covers `Memory` provider initialization (OpenAI/HuggingFace/invalid) and
+`CachedEmbeddings` reuse of previously computed document vectors via a
+`SQLiteTTLCache`.
+"""
+
 import pytest
 from pathlib import Path
 from uuid import uuid4

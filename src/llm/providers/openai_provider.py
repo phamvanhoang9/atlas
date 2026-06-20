@@ -17,6 +17,17 @@ class OpenAIProvider:
     """OpenAI / OpenAI-compatible chat completion provider."""
 
     def __init__(self, model: str, temperature: float, max_tokens: int, **kwargs: Any) -> None:
+        """Initialize the provider and build the underlying ChatOpenAI client.
+
+        Args:
+          model: OpenAI model identifier (e.g. "gpt-4o").
+          temperature: Sampling temperature.
+          max_tokens: Maximum tokens to generate.
+          **kwargs: Reserved for future provider options; currently unused.
+
+        Raises:
+          RuntimeError: If the OPENAI_API_KEY environment variable is unset.
+        """
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
@@ -26,6 +37,11 @@ class OpenAIProvider:
 
     @staticmethod
     def _get_api_key() -> str:
+        """Return the OpenAI API key from the environment.
+
+        Raises:
+          RuntimeError: If OPENAI_API_KEY is not set.
+        """
         try:
             return os.environ["OPENAI_API_KEY"]
         except KeyError as exc:
@@ -50,6 +66,20 @@ class OpenAIProvider:
         stream: bool,
         websocket: Any = None,
     ) -> str:
+        """Get a chat completion, optionally streaming partial output.
+
+        Args:
+          messages: Chat messages in OpenAI-style role/content dict form.
+          stream: If True, streams partial output to `websocket` (or logs
+            it) as it arrives.
+          websocket: Optional WebSocket to stream partial output to.
+
+        Returns:
+          The completion text returned by the model.
+
+        Raises:
+          httpx.ReadError: If a network error occurs while streaming.
+        """
         if not stream:
             output = await self.llm.ainvoke(messages)
             return output.content

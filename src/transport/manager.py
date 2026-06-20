@@ -40,6 +40,7 @@ class WebSocketManager:
                 break
 
     async def connect(self, websocket: WebSocket) -> None:
+        """Accept *websocket* and register its queue, sender task, and state."""
         await websocket.accept()
         self.active_connections.append(websocket)
         self.message_queues[websocket] = asyncio.Queue()
@@ -49,6 +50,7 @@ class WebSocketManager:
         logger.info("WebSocket manager connected active_connections=%s", len(self.active_connections))
 
     async def disconnect(self, websocket: WebSocket) -> None:
+        """Cancel the sender task and clear all tracked state for *websocket*."""
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
             self.sender_tasks[websocket].cancel()
@@ -115,6 +117,7 @@ class _WebsocketWrapper:
         self.original_ws = original_ws
 
     async def send_json(self, data: dict[str, Any]) -> None:
+        """Forward *data* to the websocket, caching select message types on *mgr*."""
         if data.get("type") == "suggested_questions" and self.mgr and self.original_ws:
             questions = data.get("output", [])
             if isinstance(questions, list):

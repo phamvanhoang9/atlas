@@ -1,3 +1,5 @@
+"""Tests for `Config`: file/env precedence, mode overrides, and validation."""
+
 import pytest
 import os
 import json
@@ -7,6 +9,11 @@ from src.config.config import Config, ConfigError
 
 @pytest.fixture
 def temp_config_file():
+    """Write a temporary `config.json`-style file and yield its path.
+
+    Yields:
+      The path to the temp config file. The file is deleted on teardown.
+    """
     config_data = {
         "retriever": "tavily",
         "llm_model": "custom_model",
@@ -95,6 +102,7 @@ def test_required_secrets_validation():
 
 @pytest.fixture(autouse=True)
 def clean_env(monkeypatch):
+    """Strip config-related env vars before each test so file/default values apply."""
     monkeypatch.delenv("RETRIEVER", raising=False)
     monkeypatch.delenv("TOKEN_LIMIT", raising=False)
     monkeypatch.delenv("CONFIG_FILE", raising=False)

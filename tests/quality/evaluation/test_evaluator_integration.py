@@ -1,3 +1,5 @@
+"""Integration tests for `EvaluationRunner`: end-to-end scoring, query translation, and the RAGAS adapter fallback."""
+
 import importlib.util
 
 import pytest

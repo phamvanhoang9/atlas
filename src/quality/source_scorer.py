@@ -48,6 +48,14 @@ NON_PRIMARY_CATEGORIES = ("low_quality",)
 
 @dataclass(frozen=True)
 class SourceClassification:
+    """The taxonomy category, numeric score, and display label for a source URL.
+
+    Attributes:
+      category: One of the keys in CATEGORY_SCORES (e.g. "official", "peer_reviewed").
+      score: The 0-100 trust score for the category, from CATEGORY_SCORES.
+      label: The human-readable citation label for the category, from CATEGORY_LABELS.
+    """
+
     category: str
     score: int
     label: str

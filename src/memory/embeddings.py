@@ -16,8 +16,12 @@ OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
 
 
 class CachedEmbeddings(Embeddings):
-    """
-    Cache wrapper for LangChain-compatible embedding providers.
+    """Caches embedding vectors for a LangChain-compatible embeddings provider.
+
+    Wraps any `Embeddings` implementation and persists computed vectors in a
+    `SQLiteTTLCache`, keyed by provider namespace, text, and embedding kind
+    (query vs. document). Cache misses are batched through the underlying
+    provider; cache hits skip the provider call entirely.
     """
 
     def __init__(
@@ -44,6 +48,7 @@ class CachedEmbeddings(Embeddings):
         )
 
     def embed_query(self, text: str) -> list[float]:
+        """Return the cached embedding for `text`, computing it on a cache miss."""
         key = self._key(text, "query")
         cached = self.cache.get("embeddings", key)
         if cached is not None:
@@ -55,6 +60,15 @@ class CachedEmbeddings(Embeddings):
         return embedding
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        """Return embeddings for `texts`, computing only the cache misses.
+
+        Args:
+          texts: Document texts to embed, in order.
+
+        Returns:
+          Embeddings in the same order as `texts`, mixing cached and
+          newly-computed vectors.
+        """
         results: list[list[float] | None] = []
         missing_indexes: list[int] = []
         missing_texts: list[str] = []
@@ -78,6 +92,7 @@ class CachedEmbeddings(Embeddings):
         return [embedding for embedding in results if embedding is not None]
 
     async def aembed_query(self, text: str) -> list[float]:
+        """Async version of `embed_query`; falls back to the sync path if unsupported."""
         key = self._key(text, "query")
         cached = self.cache.get("embeddings", key)
         if cached is not None:
@@ -91,6 +106,7 @@ class CachedEmbeddings(Embeddings):
         return embedding
 
     async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
+        """Async version of `embed_documents`; falls back to the sync path if unsupported."""
         if hasattr(self.embeddings, "aembed_documents"):
             results: list[list[float] | None] = []
             missing_indexes: list[int] = []
@@ -118,7 +134,19 @@ class CachedEmbeddings(Embeddings):
 
 
 class Memory:
+    """Constructs a (optionally cached) embeddings provider by name."""
+
     def __init__(self, embedding_provider: str, **kwargs: Any) -> None:
+        """Build the embeddings provider, wrapping it in a cache unless disabled.
+
+        Args:
+          embedding_provider: Provider id; one of "openai" or "huggingface".
+          **kwargs: Currently unused; accepted for forward-compatible
+            provider-specific options.
+
+        Raises:
+          ValueError: If `embedding_provider` is not a recognized provider id.
+        """
         match embedding_provider:
             case "openai":
                 embeddings = OpenAIEmbeddings(model=OPENAI_EMBEDDING_MODEL)
@@ -144,4 +172,5 @@ class Memory:
         self._embeddings = embeddings
 
     def get_embeddings(self) -> Any:
+        """The configured embeddings provider (cached, if caching is enabled)."""
         return self._embeddings

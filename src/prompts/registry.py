@@ -1,3 +1,5 @@
+"""Render named prompt templates with variable substitution."""
+
 from __future__ import annotations
 
 import logging
@@ -14,6 +16,7 @@ _TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 
 
 def _normalize_value(value: Any) -> str:
+    """Coerce *value* to a string, joining list/tuple items with blank lines."""
     if isinstance(value, list):
         return "\n\n".join(str(item) for item in value)
     if isinstance(value, tuple):
@@ -28,6 +31,21 @@ def _get_template(name: str) -> PromptTemplate:
 
 
 def render_prompt(name: str, variables: dict[str, Any]) -> str | None:
+    """Render the named template with *variables* substituted in.
+
+    Templates are loaded from ``src/prompts/templates/{name}.yaml`` and
+    cached. Lists/tuples in *variables* are flattened to strings (see
+    ``_normalize_value``) before substitution.
+
+    Args:
+      name: Template name, without the ``.yaml`` extension.
+      variables: Values to substitute into the template via
+        ``string.Template.safe_substitute``.
+
+    Returns:
+      The rendered prompt text, or ``None`` if the template is missing
+      or malformed (logged as a warning rather than raised).
+    """
     try:
         prompt = _get_template(name)
         normalized = {key: _normalize_value(value) for key, value in variables.items()}

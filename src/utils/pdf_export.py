@@ -1,4 +1,6 @@
-import aiofiles 
+"""Render Markdown research reports to PDF (with Markdown-file fallback)."""
+
+import aiofiles
 # aiofiles allows for file reading and writing operations to be performed without blocking the asynchronous event loop, while is particularly useful in asynchronous programming paradigms.
 import logging
 import urllib 
@@ -17,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 def _extract_title(markdown_text: str) -> str:
+    """Return the text of the first H1 heading, or a default title."""
     for line in markdown_text.splitlines():
         if line.startswith("# "):
             return line[2:].strip()
@@ -24,6 +27,12 @@ def _extract_title(markdown_text: str) -> str:
 
 
 def _build_table_of_contents(markdown_text: str) -> str:
+    """Build an HTML table-of-contents section from H2/H3 headings.
+
+    Returns:
+      HTML markup for the TOC, or an empty string if no H2/H3 headings
+      are found. Limited to the first 18 headings.
+    """
     items = []
     for line in markdown_text.splitlines():
         if line.startswith("## "):
@@ -64,11 +73,16 @@ async def write_to_file(filename: str, text: str) -> None:
 async def write_md_to_pdf(text: str) -> str:
     """Converts Markdown text to a PDF file and returns the file path.
 
+    Always writes the Markdown source alongside the PDF. Falls back to
+    returning the ``.md`` file's path (instead of ``.pdf``) when PyMuPDF
+    is not installed or PDF rendering fails.
+
     Args:
         text (str): Markdown text to convert.
 
     Returns:
-        str: The encoded file path of the generated PDF.
+        str: The URL-encoded path of the generated PDF, or of the
+        Markdown file if PDF generation was skipped or failed.
     """
     task = uuid.uuid4().hex
     file_path = f"outputs/{task}"

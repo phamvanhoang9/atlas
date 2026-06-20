@@ -1,3 +1,5 @@
+"""Tests for refusal-detection metrics: detection, accuracy, and over-answering."""
+
 from src.quality.evaluation.refusal_metrics import (
     detect_refusal,
     over_answering_rate,

@@ -1,3 +1,9 @@
+"""Tests for `ReportValidator`: grounding checks on generated report citations.
+
+Verifies citation URLs in a report are matched against the source context
+(Vietnamese-language report fixtures, matching the product's UI locale).
+"""
+
 from src.quality import ReportValidator
 
 

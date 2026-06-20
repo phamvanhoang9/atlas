@@ -1,9 +1,12 @@
+"""Tests for `Scraper`: HTML/PDF extraction, content filtering, and the run loop."""
+
 import pytest
 from unittest.mock import MagicMock, patch
 from src.scraper.scraper import Scraper
 
 @pytest.fixture
 def scraper():
+    """Provide a `Scraper` configured with a single test URL and user agent."""
     return Scraper(urls=["https://example.com"], user_agent="test-agent")
 
 def test_scraper_initialization(scraper):

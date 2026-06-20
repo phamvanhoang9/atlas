@@ -1,3 +1,5 @@
+"""Tests for the YAML-templated prompt registry: search query, report, and agent prompts."""
+
 from src.prompts.functions import (
     auto_agent_instructions,
     generate_search_queries_prompt,

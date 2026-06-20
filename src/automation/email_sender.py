@@ -24,6 +24,18 @@ RETRY_DELAYS_SECONDS: tuple[float, ...] = (1.0, 2.0, 4.0)
 
 @dataclass(frozen=True)
 class EmailSettings:
+    """SMTP delivery settings resolved from environment variables.
+
+    Attributes:
+      mode: Delivery mode, ``"smtp"`` or ``"mock"``.
+      host: SMTP server hostname.
+      port: SMTP server port.
+      username: SMTP auth username.
+      password: SMTP auth password.
+      sender: From-address used on outgoing messages.
+      starttls: Whether to negotiate STARTTLS before authenticating.
+    """
+
     mode: str  # "smtp" | "mock"
     host: str
     port: int
@@ -34,6 +46,11 @@ class EmailSettings:
 
     @classmethod
     def from_env(cls) -> "EmailSettings":
+        """Build settings from ``SMTP_*``/``EMAIL_MODE`` env vars.
+
+        Falls back to mock mode when ``host``/``sender`` are missing, even
+        if ``EMAIL_MODE=smtp`` was explicitly requested.
+        """
         host = os.getenv("SMTP_HOST", "")
         port = int(os.getenv("SMTP_PORT", "587") or "587")
         username = os.getenv("SMTP_USERNAME", "")
@@ -59,6 +76,14 @@ class EmailSettings:
 
 @dataclass(frozen=True)
 class EmailSendResult:
+    """Outcome of an email send attempt.
+
+    Attributes:
+      status: One of ``"sent"``, ``"mocked"``, or ``"failed"``.
+      attempts: Number of SMTP send attempts made.
+      error: Error description if ``status`` is ``"failed"``.
+    """
+
     status: str  # "sent" | "mocked" | "failed"
     attempts: int
     error: str = ""
@@ -87,6 +112,20 @@ class EmailSender:
         self.settings = settings or EmailSettings.from_env()
 
     def send(self, recipient: str, subject: str, report_markdown: str) -> EmailSendResult:
+        """Send a report email to *recipient*, retrying on transient SMTP errors.
+
+        In mock mode (see ``EmailSettings.from_env``), logs the would-be
+        send and returns a ``"mocked"`` result without contacting SMTP.
+
+        Args:
+          recipient: Destination email address.
+          subject: Email subject line.
+          report_markdown: Report body in Markdown; rendered to plain text
+            and HTML.
+
+        Returns:
+          The outcome of the send, including attempt count and any error.
+        """
         if not recipient:
             return EmailSendResult(status="failed", attempts=0, error="No recipient configured")
 

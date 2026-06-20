@@ -1,14 +1,18 @@
+"""Tests for `ContextCompressor`: relevance retrieval, doc limiting, and fallback."""
+
 import pytest
 from unittest.mock import MagicMock, patch
 from src.context.compression import ContextCompressor
 
 @pytest.fixture
 def mock_embeddings():
+    """Provide a mock embeddings object for `ContextCompressor` construction."""
     embeddings = MagicMock()
     return embeddings
 
 @pytest.fixture
 def sample_docs():
+    """Provide two short scraped-document dicts covering distinct topics."""
     return [
         {"url": "url1", "raw_content": "This is a document about machine learning. Machine learning is a subset of AI."},
         {"url": "url2", "raw_content": "Quantum computing is a field of computing based on quantum mechanics."}

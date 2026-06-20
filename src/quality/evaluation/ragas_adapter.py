@@ -1,3 +1,12 @@
+"""Optional bridge to the RAGAS library for the RAG Triad metrics.
+
+RagasAdapter wraps RAGAS's faithfulness/answer_relevancy/context_relevancy
+metrics when the `ragas` package is installed, supporting both the modern
+(v0.2+) and legacy Dataset-based APIs. Used as a supplementary signal
+alongside this codebase's own deterministic/LLM-judge metrics; never raises
+on failure, so a RAGAS or dependency issue can't break evaluation.
+"""
+
 from __future__ import annotations
 
 import importlib
@@ -16,6 +25,7 @@ _RAGAS_WARN_THRESHOLD = 0.55
 
 
 def _label(score: float) -> str:
+    """Map a RAGAS metric score to "pass"/"warn"/"fail" using the RAGAS-specific thresholds."""
     if score >= _RAGAS_PASS_THRESHOLD:
         return "pass"
     if score >= _RAGAS_WARN_THRESHOLD:
@@ -37,6 +47,16 @@ class RagasAdapter:
     _MIN_CONTEXTS = 2  # RAGAS ContextRelevance requires ≥2 contexts to avoid NaN
 
     async def evaluate(self, input_data: EvaluationInput) -> dict[str, MetricResult]:
+        """Score input_data with RAGAS, if available and enough contexts were retrieved.
+
+        Args:
+          input_data: The evaluation sample, including query, contexts, and response.
+
+        Returns:
+          A dict of "ragas_<metric>" name to MetricResult. Empty if RAGAS is
+          not installed or scoring failed; metrics are "skipped" (not absent)
+          if there weren't enough retrieved contexts for stable RAGAS scoring.
+        """
         if not self.available:
             return {}
         if len(input_data.retrieved_contexts) < self._MIN_CONTEXTS:
@@ -56,6 +76,7 @@ class RagasAdapter:
             return {}
 
     async def _run(self, input_data: EvaluationInput) -> dict[str, MetricResult]:
+        """Run RAGAS, trying the modern API first and falling back to the legacy API."""
         # Try modern v0.2+ API first (SingleTurnSample + EvaluationDataset)
         try:
             return await self._run_v2(input_data)
@@ -131,6 +152,11 @@ class RagasAdapter:
 
 
 def _parse_result(raw_result: Any) -> dict[str, MetricResult]:
+    """Normalize a RAGAS evaluate() result (DataFrame-like or dict) into MetricResults.
+
+    NaN scores (from an LLM or embeddings error inside RAGAS) become
+    "skipped" results rather than being treated as a real 0.0 score.
+    """
     if hasattr(raw_result, "to_pandas"):
         row: dict[str, Any] = raw_result.to_pandas().iloc[0].to_dict()
     elif isinstance(raw_result, dict):

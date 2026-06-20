@@ -1,3 +1,12 @@
+"""Web search via the Tavily API, with a DuckDuckGo fallback and SQLite cache.
+
+`TavilySearch` queries Tavily (biased toward academic/primary-source
+domains via include/exclude domain lists) and transparently falls back to
+DuckDuckGo if the Tavily request fails. Results are cached in a
+`SQLiteTTLCache` keyed on query/max_results/provider when caching is
+enabled.
+"""
+
 import logging
 import os
 from typing import Any
@@ -46,7 +55,7 @@ _DEFAULT_EXCLUDE_DOMAINS = [
 
 class TavilySearch:
     """
-    Tavily API retriever.
+    Tavily API retriever with DuckDuckGo fallback and result caching.
     """
 
     def __init__(
@@ -57,6 +66,15 @@ class TavilySearch:
     ) -> None:
         """
         Initialize the TavilySearch object.
+
+        Args:
+          query: The search query string.
+          include_domains: Domains to bias results toward. Defaults to a
+            list of academic/primary-source domains (arXiv, ACM, IEEE,
+            etc.) when not provided.
+          exclude_domains: Domains to exclude from results. Defaults to a
+            list of low-signal/social domains (Medium, Reddit, etc.) when
+            not provided.
         """
         self.query = query
         self.include_domains = include_domains if include_domains is not None else _DEFAULT_INCLUDE_DOMAINS
@@ -70,6 +88,12 @@ class TavilySearch:
     def get_api_key(self) -> str:
         """
         Gets the Tavily API key.
+
+        Returns:
+          The value of the `TAVILY_API_KEY` environment variable.
+
+        Raises:
+          RuntimeError: If `TAVILY_API_KEY` is not set.
         """
         try:
             return os.environ["TAVILY_API_KEY"]
@@ -81,7 +105,19 @@ class TavilySearch:
 
     def search(self, max_results: int = 7) -> list[dict[str, Any]]:
         """
-        Searches the query.
+        Searches the query, with cache lookup and DuckDuckGo fallback.
+
+        Checks the SQLite cache first (if enabled). On a miss, queries
+        Tavily; if Tavily raises an error, falls back to a DuckDuckGo text
+        search instead. Successful results are written back to the cache.
+
+        Args:
+          max_results: The maximum number of results to return.
+
+        Returns:
+          A list of result dicts. Tavily results are normalized to
+          `{"href": str, "body": str}`; DuckDuckGo fallback results keep
+          the `ddgs` library's native shape.
         """
         cache_key = None
         if self.cache is not None:

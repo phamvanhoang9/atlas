@@ -1,3 +1,5 @@
+"""Minimal YAML loader for ATLAS prompt template files."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -6,6 +8,14 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class PromptTemplate:
+    """A single loaded prompt template.
+
+    Attributes:
+      name: Template identifier, as declared in the YAML file.
+      version: Template version string.
+      template: The raw template body (a ``string.Template`` pattern).
+    """
+
     name: str
     version: str
     template: str
@@ -20,6 +30,17 @@ def load_prompt_template(path: Path) -> PromptTemplate:
       version: "1"
       template: |
         multiline template
+
+    Args:
+      path: Path to the YAML template file.
+
+    Returns:
+      The parsed template.
+
+    Raises:
+      ValueError: If a line is malformed, the template block is
+        improperly indented, or required fields (``name``, ``template``)
+        are missing.
     """
     content = path.read_text(encoding="utf-8")
     metadata: dict[str, str] = {}

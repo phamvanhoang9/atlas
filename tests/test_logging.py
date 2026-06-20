@@ -8,6 +8,7 @@ from src.observability.logging import ColorFormatter, setup_logging
 
 
 def _record(level: int = logging.INFO, name: str = "src.demo", msg: str = "hello") -> logging.LogRecord:
+    """Build a minimal `LogRecord` for exercising `ColorFormatter.format()`."""
     return logging.LogRecord(
         name=name, level=level, pathname=__file__, lineno=1, msg=msg, args=(), exc_info=None
     )

@@ -1,3 +1,5 @@
+"""Tests for `TavilySearch`: API key handling, search, DuckDuckGo fallback, and caching."""
+
 import pytest
 from unittest.mock import MagicMock, patch
 import os

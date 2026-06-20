@@ -1,3 +1,11 @@
+"""Scrape page and PDF content from a list of URLs.
+
+Provides the `Scraper` class, which fetches each URL concurrently and
+dispatches to the appropriate extraction path (PDF via PyMuPDF, arXiv via
+PDF-then-abstract fallback, or HTML via BeautifulSoup) depending on the
+link's shape.
+"""
+
 import logging
 import os
 import re
@@ -33,10 +41,16 @@ def suppress_libxml2_warnings() -> Iterator[None]:
 
 class Scraper:
     """
-    Scraper class to extract content from links.
+    Extracts text content from a batch of URLs (HTML or PDF).
     """
 
     def __init__(self, urls: list[str], user_agent: str) -> None:
+        """Initialize the scraper with the URLs to fetch and a request session.
+
+        Args:
+          urls: The list of URLs to scrape when `run()` is called.
+          user_agent: The User-Agent header value sent with every request.
+        """
         self.urls = urls
         self.session = requests.Session()
         self.session.headers.update(
@@ -53,7 +67,12 @@ class Scraper:
 
     def run(self) -> list[dict[str, Any]]:
         """
-        Extracts content from all configured links.
+        Extracts content from all configured links concurrently.
+
+        Returns:
+          A list of `{"url": str, "raw_content": str}` dicts, one per URL
+          that yielded usable content. URLs that failed to scrape or
+          produced fewer than 100 characters are dropped from the result.
         """
         partial_extract = partial(self.extract_data_from_link, session=self.session)
         with ThreadPoolExecutor(max_workers=getattr(self.config, "max_workers", 16)) as executor:
@@ -63,6 +82,17 @@ class Scraper:
     def extract_data_from_link(self, link: str, session: requests.Session) -> dict[str, Any]:
         """
         Extracts data from one link.
+
+        Routes the link to a PDF, arXiv, or HTML scraper based on its shape.
+
+        Args:
+          link: The URL to scrape.
+          session: The `requests.Session` to use for non-PDF HTTP requests.
+
+        Returns:
+          A dict with keys `url` and `raw_content`. `raw_content` is the
+          scraped text, or `None` if scraping failed or returned fewer than
+          100 characters.
         """
         content = ""
         try:
@@ -82,6 +112,20 @@ class Scraper:
             return {"url": link, "raw_content": None}
 
     def scrape_text_with_bs(self, link: str, session: requests.Session) -> str:
+        """Fetch an HTML page and extract its visible text content.
+
+        Args:
+          link: The URL to fetch.
+          session: The `requests.Session` used to issue the GET request.
+
+        Returns:
+          The page's text, extracted from paragraph and heading tags and
+          collapsed to one stripped line per chunk.
+
+        Raises:
+          requests.exceptions.RequestException: If the HTTP request fails
+            or returns an error status.
+        """
         response = session.get(link, timeout=4)
         response.raise_for_status()
         soup = BeautifulSoup(response.content, "lxml", from_encoding=response.encoding)
@@ -111,6 +155,16 @@ class Scraper:
     def scrape_pdf_with_pymupdf(self, url: str) -> str:
         """
         Scrape a PDF with PyMuPDF.
+
+        IEEE-hosted PDFs are routed through `_scrape_blocking_pdf_host`
+        since IEEE blocks direct PyMuPDF/requests downloads.
+
+        Args:
+          url: The URL of the PDF to download and parse.
+
+        Returns:
+          The extracted PDF text, or an empty string if the download or
+          parse failed.
         """
         try:
             if "ieee.org" in url or "ieeexplore" in url:
@@ -138,6 +192,19 @@ class Scraper:
             return ""
 
     def _scrape_blocking_pdf_host(self, url: str) -> str:
+        """Download a PDF with browser-like headers, bypassing bot blocking.
+
+        Hosts like IEEE return HTTP 418 for default `requests`/PyMuPDF
+        user agents, so this downloads the PDF to a temp file with a
+        spoofed browser User-Agent and Referer before parsing it.
+
+        Args:
+          url: The URL of the PDF to download.
+
+        Returns:
+          The extracted PDF text, or an empty string if the download was
+          blocked, failed, or returned an error status.
+        """
         headers = {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -179,6 +246,13 @@ class Scraper:
     def scrape_pdf_with_arxiv(self, query: str) -> str:
         """
         Scrape a PDF with ArxivRetriever.
+
+        Args:
+          query: The arXiv search query (e.g. paper title or id).
+
+        Returns:
+          The page content of the top matching arXiv document, or an empty
+          string if no documents were retrieved or the retriever failed.
         """
         try:
             with suppress_libxml2_warnings():
@@ -197,6 +271,14 @@ class Scraper:
     def get_content_from_url(self, soup: BeautifulSoup) -> str:
         """
         Get text from parsed HTML.
+
+        Args:
+          soup: A parsed `BeautifulSoup` document (script/style tags
+            already stripped).
+
+        Returns:
+          The concatenated text of all paragraph and heading tags
+          (`p`, `h1`-`h5`), each followed by a newline.
         """
         text = ""
         tags = ["p", "h1", "h2", "h3", "h4", "h5"]

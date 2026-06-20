@@ -1,3 +1,10 @@
+"""Tests for the legacy LLM provider wrappers and chat completion retry logic.
+
+Covers OpenAI/Google provider initialization and chat response handling
+(`src/llm_provider/`), plus retry-on-transient-error behavior in
+`create_chat_completion` (`src/utils/llm.py`).
+"""
+
 import pytest
 import httpx
 from unittest.mock import MagicMock, patch, AsyncMock

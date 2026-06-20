@@ -44,7 +44,35 @@ async def create_chat_completion(
     llm_kwargs: dict[str, Any] | None = None,
     report_type: Optional[str] = None,
 ) -> str:
-    """Create a chat completion with exponential-backoff retry and model routing."""
+    """Create a chat completion with exponential-backoff retry and model routing.
+
+    Routes the requested model through `route_model()` based on `report_type`,
+    formats the model string for LiteLLM, and retries on transient provider
+    errors (connection, timeout, rate limit, server errors) with increasing
+    delays before giving up.
+
+    Args:
+      messages: Chat messages in OpenAI-style role/content dict form.
+      model: The requested model identifier; required.
+      temperature: Sampling temperature passed to the provider.
+      max_tokens: Maximum tokens to generate. Must not exceed 12001.
+      llm_provider: Provider name (e.g. "openai", "google"); required.
+      stream: If True, streams tokens to `websocket` (or logs them) as they
+        arrive instead of returning only the final text.
+      websocket: Optional WebSocket to stream partial output to.
+      llm_kwargs: Extra keyword arguments forwarded to the LiteLLM provider.
+      report_type: The canonical mode id driving model routing (see
+        src.modes.registry). Defaults to "quick" if not provided.
+
+    Returns:
+      The completion text returned by the provider.
+
+    Raises:
+      ValueError: If `model` or `llm_provider` is None, or `max_tokens`
+        exceeds 12001.
+      RuntimeError: If all retry attempts are exhausted without a
+        successful response.
+    """
     if model is None:
         raise ValueError("Model cannot be None")
     if llm_provider is None:

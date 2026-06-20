@@ -1,3 +1,5 @@
+"""Tests for generation-quality metrics: claim extraction, faithfulness, relevance, citations."""
+
 import pytest
 
 from src.quality.evaluation.generation_metrics import (

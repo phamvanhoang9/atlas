@@ -26,6 +26,21 @@ class LangGraphResearcher:
         websocket: Any = None,
         enable_parallel_search: Optional[bool] = None,
     ) -> None:
+        """Resolve config/mode overrides and build the workflow for this run.
+
+        Args:
+            query: The user's research question.
+            report_type: Mode id used to select config overrides (e.g.
+              ``quick``, ``research``, ``deep``).
+            source_urls: Optional URLs to scrape directly instead of
+              generating and running search queries.
+            config_path: Optional path to a config file; defaults to the
+              standard config resolution in ``Config``.
+            websocket: Optional websocket used to stream progress to a
+              connected client.
+            enable_parallel_search: Optional override for parallel search;
+              falls back to the resolved config value when omitted.
+        """
         self.query = query
         self.report_type = report_type
         self.source_urls = source_urls or []
@@ -90,6 +105,8 @@ class LangGraphResearcher:
         async for state in self.workflow.astream(initial_state):
             final_state = state
             if isinstance(state, dict) and state:
+                # astream yields {node_name: node_output} per step; since only
+                # one node runs per step, the last (only) key identifies it.
                 node_name = list(state.keys())[-1]
                 node_state = state[node_name]
                 logger.info(

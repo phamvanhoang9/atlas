@@ -9,6 +9,7 @@ from src.quality.source_scorer import (
 
 
 def _doc(url: str, content: str = "some content") -> dict:
+    """Build a minimal scraped-document dict for scoring/ranking tests."""
     return {"url": url, "raw_content": content, "title": url}
 
 

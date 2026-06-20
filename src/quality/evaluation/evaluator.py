@@ -1,3 +1,12 @@
+"""Orchestrates the full RAG quality evaluation pipeline for one sample.
+
+EvaluationRunner runs the RAG Triad (context relevance, faithfulness, answer
+relevance), supporting retrieval/generation/safety metrics, and an optional
+RAGAS pass, then aggregates everything into a single EvaluationResult with
+an overall score, label, and improvement recommendations. evaluate_state_node
+is the LangGraph workflow hook that runs this when ENABLE_EVALUATION is set.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -41,6 +50,8 @@ logger = logging.getLogger(__name__)
 
 
 class EvaluationRunner:
+    """Runs the full set of RAG quality metrics for an EvaluationInput sample."""
+
     def __init__(
         self,
         *,
@@ -58,6 +69,15 @@ class EvaluationRunner:
 
     @classmethod
     def from_config(cls, cfg: Any) -> "EvaluationRunner":
+        """Build an EvaluationRunner from the app Config, wiring up the LLM judge and translator.
+
+        Args:
+          cfg: The app Config (or any object exposing eval_fail_thresholds,
+            eval_top_k, eval_llm_model, eval_llm_provider, llm_provider).
+
+        Returns:
+          A configured EvaluationRunner.
+        """
         judge = _build_llm_judge_from_config(cfg)
         translator = _build_llm_translator_from_config(cfg)
         return cls(
@@ -70,6 +90,16 @@ class EvaluationRunner:
         )
 
     async def aevaluate_single(self, input_data: EvaluationInput) -> EvaluationResult:
+        """Run the full metric suite against input_data and aggregate into an EvaluationResult.
+
+        Args:
+          input_data: The sample to evaluate (query, retrieved contexts,
+            generated output, expected behavior, and rubric).
+
+        Returns:
+          An EvaluationResult with every computed metric, an overall score
+          and label, recommendations, and a deterministic quality_check.
+        """
         retrieved_ids = [context.id for context in input_data.retrieved_contexts]
         metrics: dict[str, MetricResult] = {}
 
@@ -180,6 +210,15 @@ class EvaluationRunner:
 
 
 def contexts_from_strings(contexts: Sequence[str], source_urls: Sequence[str] | None = None) -> list[RetrievedContext]:
+    """Wrap plain context strings into RetrievedContext objects with synthetic ids and ranks.
+
+    Args:
+      contexts: The raw context text chunks, in retrieval rank order.
+      source_urls: Optional source URLs aligned by index with contexts.
+
+    Returns:
+      A list of RetrievedContext, one per input string.
+    """
     urls = list(source_urls or [])
     return [
         RetrievedContext(
@@ -193,6 +232,22 @@ def contexts_from_strings(contexts: Sequence[str], source_urls: Sequence[str] | 
 
 
 async def evaluate_state_node(state: dict[str, Any]) -> dict[str, Any]:
+    """LangGraph workflow node: run online evaluation on the finished report, if enabled.
+
+    No-ops if cfg.enable_evaluation is falsy. Builds an EvaluationInput from
+    the research state, runs EvaluationRunner, logs a summary, streams the
+    result over the websocket if connected, and never lets an evaluation
+    failure break the workflow (errors are caught and recorded instead).
+
+    Args:
+      state: The LangGraph ResearchState dict; must contain "cfg", "query",
+        "report", "context", "visited_urls", and optionally "websocket".
+
+    Returns:
+      A copy of state with an added "evaluation_result" key (the evaluation
+      payload, or {"error": ...} if evaluation failed). Returns state
+      unchanged if evaluation is disabled.
+    """
     cfg = state.get("cfg")
     if not getattr(cfg, "enable_evaluation", False):
         return state
@@ -265,6 +320,12 @@ _SKIP_IN_OVERALL = frozenset({"unsupported_claim_count"})
 
 
 def _overall_score(metrics: dict[str, MetricResult]) -> float:
+    """Average all computed metric scores into one 0-1 overall score.
+
+    Skips metrics with no score (None/NaN) and metrics in _SKIP_IN_OVERALL.
+    Metrics in _INVERTED_METRICS (where a lower score is better) are flipped
+    via (1 - score) before averaging.
+    """
     import math
     scores = []
     for metric in metrics.values():
@@ -282,6 +343,7 @@ def _overall_score(metrics: dict[str, MetricResult]) -> float:
 
 
 def _overall_label(metrics: dict[str, MetricResult], overall_score: float) -> str:
+    """Derive the overall pass/warn/fail label, with blocking metrics able to force a "fail"."""
     blocking = {"faithfulness", "answer_relevance", "context_relevance", "refusal_accuracy"}
     if any(metric.label == "fail" and name in blocking for name, metric in metrics.items()):
         return "fail"
@@ -293,6 +355,7 @@ def _overall_label(metrics: dict[str, MetricResult], overall_score: float) -> st
 
 
 def _recommendations(metrics: dict[str, MetricResult]) -> list[str]:
+    """Map failed metric names to human-readable improvement suggestions."""
     recommendations: list[str] = []
     failed = {name for name, metric in metrics.items() if metric.label == "fail"}
     if failed.intersection({"context_relevance", "context_precision", "context_recall", "recall@3", "recall@5"}):
@@ -332,6 +395,16 @@ async def _translate_to_english(text: str, translator: Callable[[str], Awaitable
 
 
 def _build_llm_judge_from_config(cfg: Any) -> Callable[[str], Awaitable[str]] | None:
+    """Build the LLM-judge callable used by RAG Triad metrics, or None if no judge model is configured.
+
+    Args:
+      cfg: The app Config, read for eval_llm_model, eval_llm_provider
+        (falling back to llm_provider when set to "same_as_main"), and llm_kwargs.
+
+    Returns:
+      An async callable that sends prompt to the configured judge model and
+      returns its raw text response, or None if eval_llm_model is unset.
+    """
     model = getattr(cfg, "eval_llm_model", "") or ""
     if not model:
         return None
@@ -375,6 +448,16 @@ def _build_llm_judge_from_config(cfg: Any) -> Callable[[str], Awaitable[str]] | 
 
 
 def _build_llm_translator_from_config(cfg: Any) -> Callable[[str], Awaitable[str]] | None:
+    """Build the Vietnamese-to-English translator callable used to score queries fairly.
+
+    Args:
+      cfg: The app Config, read for eval_llm_model, eval_llm_provider
+        (falling back to llm_provider when set to "same_as_main"), and llm_kwargs.
+
+    Returns:
+      An async callable that translates Vietnamese text to English, or None
+      if eval_llm_model is unset.
+    """
     model = getattr(cfg, "eval_llm_model", "") or ""
     if not model:
         return None

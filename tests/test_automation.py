@@ -13,6 +13,7 @@ from src.automation.store import AutomationStore
 
 @pytest.fixture
 def store(tmp_path) -> AutomationStore:
+    """Provide an `AutomationStore` backed by a fresh SQLite file in `tmp_path`."""
     return AutomationStore(db_path=str(tmp_path / "automation.sqlite"))
 
 
@@ -135,6 +136,7 @@ def test_clear_runs_removes_all_runs_but_keeps_config(store: AutomationStore) ->
 # ------------------------------------------------------------------ scheduler
 
 def _utc(hour: int, minute: int = 0) -> datetime:
+    """Build a UTC datetime on a fixed reference date (2026-06-11) for due-time tests."""
     return datetime(2026, 6, 11, hour, minute, tzinfo=ZoneInfo("UTC"))
 
 
@@ -280,6 +282,8 @@ def test_render_report_email_has_html_and_text() -> None:
 # ------------------------------------------------------------------ daily job
 
 class _FakeHistory:
+    """In-memory stand-in for `SQLiteHistoryManager` that just records entries."""
+
     def __init__(self) -> None:
         self.entries = []
 
@@ -289,6 +293,8 @@ class _FakeHistory:
 
 
 class _FakeResearcher:
+    """Stand-in researcher that returns a canned report instead of running search."""
+
     def __init__(self, report: str) -> None:
         self._report = report
 
@@ -297,6 +303,7 @@ class _FakeResearcher:
 
 
 def _mock_sender() -> EmailSender:
+    """Provide an `EmailSender` forced to mock mode so no real SMTP call is made."""
     return EmailSender(EmailSettings(
         mode="mock", host="", port=587, username="", password="", sender="", starttls=True,
     ))

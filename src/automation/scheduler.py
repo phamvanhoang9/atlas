@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def resolve_timezone(name: str) -> ZoneInfo:
+    """Return the IANA timezone for *name*, falling back to UTC if unknown."""
     try:
         return ZoneInfo(name or "UTC")
     except (ZoneInfoNotFoundError, ValueError):
@@ -30,6 +31,10 @@ def resolve_timezone(name: str) -> ZoneInfo:
 
 
 def parse_hh_mm(value: str) -> tuple[int, int]:
+    """Parse an ``"HH:MM"`` string into an ``(hour, minute)`` pair.
+
+    Falls back to ``(5, 0)`` if *value* is malformed or out of range.
+    """
     try:
         hour_str, minute_str = value.strip().split(":", 1)
         hour, minute = int(hour_str), int(minute_str)
@@ -57,6 +62,7 @@ def is_due(config: dict[str, Any], now_utc: datetime) -> bool:
 
 
 def local_date_for(config: dict[str, Any], now_utc: datetime) -> str:
+    """Return *now_utc* as an ``"YYYY-MM-DD"`` date in the config's timezone."""
     tz = resolve_timezone(config.get("timezone", "UTC"))
     return now_utc.astimezone(tz).strftime("%Y-%m-%d")
 
@@ -108,11 +114,13 @@ class AutomationScheduler:
         logger.info("Automation scheduler stopped")
 
     def start(self) -> None:
+        """Start the background tick loop if it isn't already running."""
         if self._task is None or self._task.done():
             self._stopping.clear()
             self._task = asyncio.create_task(self._loop())
 
     async def stop(self) -> None:
+        """Signal the tick loop to stop, waiting up to 5s before cancelling it."""
         self._stopping.set()
         if self._task is not None:
             try:

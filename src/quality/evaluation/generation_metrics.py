@@ -1,3 +1,10 @@
+"""Generation-quality metrics: faithfulness, answer relevance, and citation coverage.
+
+Each metric prefers an LLM judge when one is configured, falling back to
+deterministic lexical/bilingual heuristics otherwise so the evaluation
+pipeline still produces scores without an LLM call.
+"""
+
 from __future__ import annotations
 
 import re
@@ -50,6 +57,20 @@ async def answer_relevance_llm(
     judge: JudgeCallable | None = None,
     thresholds: EvaluationThresholds | None = None,
 ) -> MetricResult:
+    """Score whether the response addresses the query's intent.
+
+    Uses the LLM judge if one is configured and returns a usable score;
+    otherwise falls back to lexical similarity between query and response.
+
+    Args:
+      query: The user query.
+      response: The generated response to score.
+      judge: Optional LLM judge callable.
+      thresholds: Pass/warn thresholds; defaults to EvaluationThresholds().
+
+    Returns:
+      A MetricResult named "answer_relevance".
+    """
     thresholds = thresholds or EvaluationThresholds()
     prompt = build_judge_prompt(
         task="Score whether the response answers the user's intent.",
@@ -85,6 +106,25 @@ async def unsupported_claim_extraction(
     judge: JudgeCallable | None = None,
     support_threshold: float = 0.08,
 ) -> list[dict[str, Any]]:
+    """Extract factual claims from response and label each as supported/contradicted/unevidenced.
+
+    Tries the LLM judge first. If the judge is unavailable or returns no
+    usable evidence list, falls back to a deterministic multi-pass check per
+    claim: lexical similarity, English technical-term overlap (for
+    Vietnamese claims over English sources), Vietnamese token overlap, and
+    finally citation proximity in the response.
+
+    Args:
+      response: The generated response to extract claims from.
+      contexts: The retrieved contexts to check claims against.
+      judge: Optional LLM judge callable.
+      support_threshold: Minimum lexical_similarity score to call a claim
+        supported by the deterministic fallback.
+
+    Returns:
+      A list of dicts with keys "claim", "status", and "supporting_context_ids"
+      (plus "support_score" when produced by the deterministic fallback).
+    """
     context_texts = _context_texts(contexts)
     claims = extract_information_claims(response)
     prompt = build_judge_prompt(
@@ -191,6 +231,18 @@ async def faithfulness_llm(
     judge: JudgeCallable | None = None,
     thresholds: EvaluationThresholds | None = None,
 ) -> MetricResult:
+    """Score the fraction of the response's factual claims supported by context.
+
+    Args:
+      response: The generated response to check.
+      contexts: The retrieved contexts the response should be grounded in.
+      judge: Optional LLM judge callable, passed through to claim extraction.
+      thresholds: Pass/warn thresholds; defaults to EvaluationThresholds().
+
+    Returns:
+      A MetricResult named "faithfulness", "skipped" if no factual claims
+      were found in the response.
+    """
     thresholds = thresholds or EvaluationThresholds()
     evidence = await unsupported_claim_extraction(response, contexts, judge=judge)
     if not evidence:
@@ -221,6 +273,11 @@ async def conversational_faithfulness_llm(
     judge: JudgeCallable | None = None,
     thresholds: EvaluationThresholds | None = None,
 ) -> MetricResult:
+    """Like faithfulness_llm, but framed for responses that may include non-claim chit-chat.
+
+    Delegates to faithfulness_llm (claim extraction already ignores
+    conversational filler) and relabels the result.
+    """
     result = await faithfulness_llm(response, contexts, judge=judge, thresholds=thresholds)
     result.name = "conversational_faithfulness"
     result.reason = f"Conversational non-claim text ignored. {result.reason}"
@@ -232,6 +289,17 @@ def unsupported_claim_count_metric(
     *,
     thresholds: EvaluationThresholds | None = None,
 ) -> MetricResult:
+    """Count claims the faithfulness check marked contradicted or unevidenced.
+
+    Args:
+      faithfulness: The MetricResult from faithfulness_llm, whose evidence
+        list is used to count unsupported claims.
+      thresholds: Supplies max_unsupported_claims; defaults to EvaluationThresholds().
+
+    Returns:
+      A MetricResult named "unsupported_claim_count" with a 0-1 normalized
+      score (1.0 = no unsupported claims) and "pass"/"fail" label.
+    """
     thresholds = thresholds or EvaluationThresholds()
     unsupported = sum(
         1
@@ -261,6 +329,22 @@ def _english_key_terms(text: str) -> list[str]:
 
 
 def citation_coverage_metric(response: str, faithfulness: MetricResult) -> MetricResult:
+    """Score the fraction of faithfulness's claims that carry a nearby citation marker.
+
+    Checks each claim in four passes: an inline citation already in the
+    claim text, a citation shortly after the claim in the response, a
+    bilingual sentence-level technical-term + citation match, and finally
+    citation proximity within 800 chars of the claim.
+
+    Args:
+      response: The generated response containing citation markers.
+      faithfulness: The MetricResult from faithfulness_llm, supplying the
+        claims to check.
+
+    Returns:
+      A MetricResult named "citation_coverage", "skipped" if faithfulness
+      has no claims.
+    """
     claims = [item.get("claim", "") for item in faithfulness.evidence]
     if not claims:
         return MetricResult(
@@ -328,6 +412,23 @@ def source_scope_adherence_metric(
     *,
     faithfulness_result: "MetricResult | None" = None,
 ) -> MetricResult:
+    """Score the fraction of the response's claims that stay within the retrieved context scope.
+
+    Distinct from faithfulness: this checks whether claims are *traceable*
+    to the supplied contexts at all (a scope/grounding check), via four
+    fallback passes (lexical F1, English-term overlap, Vietnamese token
+    overlap, and trusting prior faithfulness evidence).
+
+    Args:
+      response: The generated response to check.
+      contexts: The retrieved contexts defining the allowed scope.
+      faithfulness_result: Optional prior faithfulness MetricResult, used as
+        a last-resort signal when lexical/token overlap fails.
+
+    Returns:
+      A MetricResult named "source_scope_adherence", "skipped" if no
+      factual claims were found.
+    """
     from src.quality.evaluation.schemas import MetricResult as _MR  # local to avoid circular
     context_texts = [context.text for context in contexts]
     claims = extract_information_claims(response)

@@ -1,3 +1,5 @@
+"""Smoke tests for the LangGraph workflow: construction, state, and agent routing."""
+
 import inspect
 from unittest.mock import AsyncMock, patch
 
@@ -86,5 +88,10 @@ async def test_imports():
 
 @pytest.mark.asyncio
 async def test_websocket_integration():
+    """Check that `run_agent` wires up `LangGraphResearcher` for the WS transport.
+
+    Inspects the source of `run_agent` rather than exercising a live
+    websocket, since the goal is just to catch the wiring being removed.
+    """
     source = inspect.getsource(run_agent)
     assert "LangGraphResearcher" in source

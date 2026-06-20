@@ -13,6 +13,17 @@ from src.orchestration.router import route_after_scope_gate
 
 
 def _state(query: str, **overrides) -> dict:
+    """Build a minimal `ResearchState`-shaped dict for the given query.
+
+    Args:
+      query: The user query to embed in the state.
+      **overrides: Additional state keys to set or override on top of the
+        defaults.
+
+    Returns:
+      A dict with the state keys `scope_gate_node` and routing functions
+      depend on.
+    """
     cfg = SimpleNamespace(
         llm_model="test-model",
         llm_provider="openai",

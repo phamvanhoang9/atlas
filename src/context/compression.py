@@ -1,3 +1,5 @@
+"""Semantic compression of search results into LLM-ready context."""
+
 import logging
 import re
 from typing import Any, Optional, Sequence
@@ -34,6 +36,17 @@ class SectionAwareTextSplitter(RecursiveCharacterTextSplitter):
     """
 
     def split_text(self, text: str) -> list[str]:
+        """Split text into chunks, prefixing each with its section header.
+
+        Args:
+          text: The document text to split.
+
+        Returns:
+          A list of chunk strings. Chunks derived from oversized sections are
+          prefixed with `[<header>]` so the originating section stays
+          identifiable; falls back to plain character-based splitting if no
+          section boundaries are found.
+        """
         sections = _SECTION_RE.split(text)
         if len(sections) <= 1:
             return super().split_text(text)
@@ -55,8 +68,13 @@ class SectionAwareTextSplitter(RecursiveCharacterTextSplitter):
 
 
 class ContextCompressor:
-    """
-    Compresses and filters documents using embeddings and semantic similarity.
+    """Compresses search results into relevant, citation-ready context.
+
+    Splits documents into section-aware chunks, embeds and filters them by
+    similarity to the query, and optionally reranks survivors with a
+    `CrossEncoderReranker`. Falls back to raw, untrimmed document excerpts if
+    compression errors out or yields no usable chunks, so callers always get
+    some context back.
     """
 
     def __init__(
@@ -70,6 +88,25 @@ class ContextCompressor:
         chunk_overlap: Optional[int] = None,
         cfg: Optional["Config"] = None,
     ) -> None:
+        """Initialize the compressor with documents and chunking/filter settings.
+
+        Args:
+          documents: Search result documents to compress; each expected to
+            provide `raw_content` and `url` at minimum. Treated as empty if
+            None.
+          embeddings: A LangChain-compatible embeddings object used for the
+            similarity filter.
+          max_results: Maximum number of chunks/snippets to return.
+          similaritiy_threshold: Minimum embedding similarity score for a
+            chunk to survive filtering. Falls back to `cfg.similarity_threshold`
+            or 0.55 when omitted.
+          chunk_size: Character size passed to the section-aware splitter.
+            Falls back to `cfg.chunk_size` or 1000 when omitted.
+          chunk_overlap: Character overlap between adjacent chunks. Falls
+            back to `cfg.chunk_overlap` or 200 when omitted.
+          cfg: Config instance used to resolve unset parameters; defaults to
+            a fresh `Config()`.
+        """
         self.documents = documents or []
         self.embeddings = embeddings
         self.max_results = max_results
@@ -91,6 +128,18 @@ class ContextCompressor:
         *,
         similarity_threshold: Optional[float] = None,
     ) -> ContextualCompressionRetriever:
+        """Build a retriever that splits, embeds, and filters documents by similarity.
+
+        Args:
+          documents: Documents to retrieve over; defaults to `self.documents`
+            when omitted.
+          similarity_threshold: Overrides `self.similarity_threshold` for
+            this retriever instance (used to retry with a relaxed threshold).
+
+        Returns:
+          A `ContextualCompressionRetriever` chaining section-aware splitting
+          and an embeddings-based relevance filter.
+        """
         threshold = similarity_threshold if similarity_threshold is not None else self.similarity_threshold
         splitter = SectionAwareTextSplitter(chunk_size=self.chunk_size, chunk_overlap=self.chunk_overlap)
         relevance_filter = EmbeddingsFilter(embeddings=self.embeddings, similarity_threshold=threshold)
@@ -106,6 +155,7 @@ class ContextCompressor:
         return contextual_retriever
 
     def _pretty_print_docs(self, docs: Sequence[Any], top_n: int) -> str:
+        """Format the first `top_n` docs as source/title/content text blocks."""
         return "\n".join(
             f"Source: {doc.metadata.get('source')}\n"
             f"Title: {doc.metadata.get('title')}\n"
@@ -119,6 +169,7 @@ class ContextCompressor:
         documents: Sequence[dict[str, Any]],
         max_results: int,
     ) -> str:
+        """Build raw, untrimmed context (each doc capped at 1000 chars) as a fallback."""
         return "\n\n".join(
             f"Source: {doc.get('url')}\nContent: {doc.get('raw_content', '')[:1000]}..."
             for doc in documents[:max_results]
@@ -127,8 +178,21 @@ class ContextCompressor:
     _MIN_CHUNKS = 2  # minimum chunks needed for downstream metrics (RAGAS etc.)
 
     def get_context(self, query: str, max_results: int = 5) -> str:
-        """
-        Get compressed context with error handling and fallback.
+        """Get compressed, query-relevant context with error handling and fallback.
+
+        Splits and embeds documents, filters by similarity to `query`, and
+        relaxes the similarity threshold once if too few chunks survive (see
+        `_MIN_CHUNKS`). Reranks survivors with `self.reranker` when enabled.
+        Falls back to raw document excerpts if compression raises, finds no
+        chunks, or produces empty formatted output.
+
+        Args:
+          query: The research query to filter and rerank chunks against.
+          max_results: Maximum number of chunks to include in the output.
+
+        Returns:
+          Formatted context text combining the most relevant chunks (or raw
+          fallback excerpts if compression fails).
         """
         try:
             limited_docs = self._limit_documents(self.documents)

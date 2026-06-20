@@ -16,6 +16,14 @@ class LiteLLMProvider:
     """Universal chat completion provider using LiteLLM."""
 
     def __init__(self, model: str, temperature: float, max_tokens: int, **kwargs: Any) -> None:
+        """Initialize the provider and build the underlying LiteLLM client.
+
+        Args:
+          model: LiteLLM-formatted model identifier (e.g. "gemini/gemini-1.5-pro").
+          temperature: Sampling temperature.
+          max_tokens: Maximum tokens to generate.
+          **kwargs: Reserved for future provider options; currently unused.
+        """
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
@@ -31,6 +39,15 @@ class LiteLLMProvider:
 
     @staticmethod
     def _convert_messages(messages: list[dict[str, str]]) -> list[SystemMessage | HumanMessage]:
+        """Convert role/content dicts to LangChain message objects.
+
+        Args:
+          messages: Chat messages with "role" ("system" or "user") and
+            "content" keys. Other roles are silently dropped.
+
+        Returns:
+          The corresponding list of SystemMessage/HumanMessage objects.
+        """
         converted: list[SystemMessage | HumanMessage] = []
         for msg in messages:
             if msg["role"] == "system":
@@ -45,6 +62,17 @@ class LiteLLMProvider:
         stream: bool,
         websocket: Any = None,
     ) -> str:
+        """Get a chat completion, optionally streaming partial output.
+
+        Args:
+          messages: Chat messages with "role" and "content" keys.
+          stream: If True, streams partial output to `websocket` (or logs
+            it) as it arrives.
+          websocket: Optional WebSocket to stream partial output to.
+
+        Returns:
+          The completion text returned by the model.
+        """
         converted = self._convert_messages(messages)
         if not stream:
             output = await self.llm.ainvoke(converted)

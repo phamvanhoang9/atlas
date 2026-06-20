@@ -41,6 +41,7 @@ _CONTEXT = (
 
 
 def _ctx(text: str = _CONTEXT) -> RetrievedContext:
+    """Build a rank-1 `RetrievedContext` wrapping the given text (defaults to `_CONTEXT`)."""
     return RetrievedContext(id="0", text=text, rank=1)
 
 
@@ -206,6 +207,7 @@ def test_context_recall_matches_ground_truth() -> None:
 # --------------------------------------------------------------- aggregation
 
 def _metric(name: str, score: float | None, label: str) -> MetricResult:
+    """Build a `MetricResult` with the given name/score/label for aggregation tests."""
     return MetricResult(name=name, score=score, label=label)
 
 

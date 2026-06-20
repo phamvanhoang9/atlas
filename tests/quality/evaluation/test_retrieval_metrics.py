@@ -1,3 +1,5 @@
+"""Tests for ranking metrics: recall@k, precision@k, and NDCG@k."""
+
 from src.quality.evaluation.retrieval_metrics import (
     ndcg_at_k,
     precision_at_k,

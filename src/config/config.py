@@ -1,3 +1,12 @@
+"""Runtime configuration: env-var defaults, config.json overlay, and
+pydantic validation.
+
+Precedence (lowest to highest): hard-coded env-var defaults set in
+``Config.__init__`` -> values loaded from ``config.json`` (or the file
+named by ``CONFIG_FILE``) -> mode-specific overrides applied later via
+``Config.apply_mode_config()``.
+"""
+
 import json
 import logging
 import os
@@ -14,6 +23,14 @@ class ConfigError(ValueError):
 
 
 class ConfigSchema(BaseModel):
+    """Validated shape of runtime configuration, with field-level constraints.
+
+    Used by ``Config.validate()`` to check and normalize the values
+    accumulated on a ``Config`` instance from env vars, ``config.json``,
+    and mode overrides. ``extra="allow"`` so unrecognized keys (e.g.
+    future mode-only settings) pass through rather than failing.
+    """
+
     model_config = ConfigDict(extra="allow")
 
     retriever: str = "tavily"
@@ -73,10 +90,28 @@ class ConfigSchema(BaseModel):
 
 
 class Config:
-    """Config class for ATLAS."""
-    
+    """ATLAS runtime configuration, layered from env vars, file, and mode.
+
+    Values are first seeded from environment variables (with built-in
+    defaults), then overlaid with ``config.json`` (or the file named by
+    the ``CONFIG_FILE`` env var) via ``load_config_file()``, and validated
+    against ``ConfigSchema``. Mode-specific overrides are layered on top
+    afterward by calling ``apply_mode_config()``.
+    """
+
     def __init__(self, config_file: str = None):
-        """Initialize the config class."""
+        """Seed config from env vars, then overlay and validate config_file.
+
+        Args:
+          config_file: Explicit path to a JSON config file. If omitted,
+            falls back to the ``CONFIG_FILE`` env var, then ``config.json``.
+
+        Raises:
+          FileNotFoundError: If *config_file* (or ``CONFIG_FILE``) was
+            explicitly specified but does not exist.
+          ConfigError: If the resulting configuration fails validation,
+            or required secrets are missing when ``REQUIRE_API_KEYS=true``.
+        """
         # Use config.json by default if no config_file specified and no CONFIG_FILE env var
         env_config_file = os.getenv('CONFIG_FILE')
         self._config_file_explicit = config_file is not None or env_config_file is not None
@@ -171,7 +206,17 @@ class Config:
             logger.warning(f"No mode configuration found for '{report_type}', using defaults")
         
     def load_config_file(self) -> None:
-        """Load the config file."""
+        """Overlay values from ``self.config_file`` onto this instance.
+
+        Silently does nothing if no config file is set, or if it's
+        missing and was not explicitly requested (falls back to env-var
+        defaults in that case).
+
+        Raises:
+          FileNotFoundError: If the config file was explicitly requested
+            (via constructor arg or ``CONFIG_FILE`` env var) but doesn't
+            exist on disk.
+        """
         if self.config_file is None:
             return None
         if not os.path.exists(self.config_file):
@@ -185,6 +230,7 @@ class Config:
             self.__dict__[key] = value
 
     def _load_eval_thresholds(self, raw_value: str | None) -> dict:
+        """Parse the ``EVAL_FAIL_THRESHOLDS`` JSON object, or return ``{}``."""
         if not raw_value:
             return {}
         try:

@@ -1,3 +1,10 @@
+"""Safety/behavior metrics: refusal detection, over-answering, and scope adherence.
+
+Checks whether the response refused/asked for clarification when it should
+have (or answered when it shouldn't have), using marker-string detection
+rather than an LLM, plus a basic Vietnamese clarity heuristic.
+"""
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -43,11 +50,13 @@ _CLARIFICATION_MARKERS = (
 
 
 def detect_refusal(response: str) -> bool:
+    """Check whether response contains a refusal marker (Vietnamese or English)."""
     normalized = strip_accents(response.lower())
     return any(marker in normalized for marker in _REFUSAL_MARKERS)
 
 
 def detect_clarification_request(response: str) -> bool:
+    """Check whether response asks the user for clarification, or simply ends in a question."""
     normalized = strip_accents(response.lower())
     return any(marker in normalized for marker in _CLARIFICATION_MARKERS) or response.strip().endswith("?")
 
@@ -58,6 +67,19 @@ def should_refuse(
     expected_behavior: ExpectedBehavior = "answer",
     source_scope: bool | None = None,
 ) -> bool:
+    """Determine whether a response to query should have refused, given the available evidence.
+
+    Args:
+      query: The user query.
+      retrieved_contexts: The contexts retrieved for the query.
+      expected_behavior: The rubric's expected behavior; "refuse" and
+        "ask_clarification" short-circuit the evidence check.
+      source_scope: Optional override — False forces a refusal (e.g. rubric
+        marks the query as out_of_scope).
+
+    Returns:
+      True if the response should have refused to answer.
+    """
     if expected_behavior == "refuse":
         return True
     if expected_behavior == "ask_clarification":
@@ -78,6 +100,16 @@ def refusal_accuracy(
     *,
     thresholds: EvaluationThresholds | None = None,
 ) -> MetricResult:
+    """Score whether response's refuse/clarify/answer behavior matches expected_behavior.
+
+    Args:
+      expected_behavior: The rubric's expected behavior for this sample.
+      response: The generated response to check.
+      thresholds: Supplies min_refusal_accuracy; defaults to EvaluationThresholds().
+
+    Returns:
+      A MetricResult named "refusal_accuracy" with a binary 0.0/1.0 score.
+    """
     thresholds = thresholds or EvaluationThresholds()
     refused = detect_refusal(response)
     clarified = detect_clarification_request(response)
@@ -106,6 +138,13 @@ def refusal_accuracy(
 
 
 def over_answering_rate(input_data: EvaluationInput) -> MetricResult:
+    """Detect whether the response answered with claims when it should have refused.
+
+    Returns:
+      A MetricResult named "over_answering_rate"; score 1.0 ("fail") if the
+      response should have refused but instead made factual claims without
+      refusing, otherwise 0.0 ("pass").
+    """
     response = input_data.generated_output.response
     # Use English-translated query for coverage check when available so
     # Vietnamese tokens don't register as near-zero against English contexts.
@@ -135,10 +174,26 @@ def source_scope_adherence(
     *,
     faithfulness_result: "MetricResult | None" = None,
 ) -> MetricResult:
+    """Score the fraction of response's claims that stay within contexts' scope.
+
+    Thin wrapper around source_scope_adherence_metric, kept in this module
+    alongside the other safety/behavior metrics.
+    """
     return source_scope_adherence_metric(response, contexts, faithfulness_result=faithfulness_result)
 
 
 def vietnamese_quality_check(response: str, expected_language: str = "mixed") -> MetricResult:
+    """Run basic Vietnamese-clarity heuristics on response (overlong sentences, term mistranslation).
+
+    Args:
+      response: The generated response to check.
+      expected_language: The rubric's expected language; the check is
+        skipped for purely "en" outputs.
+
+    Returns:
+      A MetricResult named "vietnamese_quality_check", "skipped" if
+      expected_language is "en".
+    """
     if expected_language not in {"vi", "mixed"}:
         return MetricResult(
             name="vietnamese_quality_check",

@@ -1,3 +1,5 @@
+"""RAGAS evaluation routes for ad-hoc and history-backed runs."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,6 +16,18 @@ _EVALUATION_RESULTS: dict[str, dict] = {}
 
 @router.post("/run")
 async def run_evaluation(input_data: EvaluationInput, _: None = Depends(require_api_auth)) -> JSONResponse:
+    """Run a RAGAS evaluation against caller-supplied query/output data.
+
+    The result is cached in-process (keyed by `sample_id`) so it can be
+    retrieved later via `GET /{run_id}`.
+
+    Args:
+      input_data: The query, retrieved contexts, and generated output to
+        evaluate.
+
+    Returns:
+      A JSON response with `{"success": True, "data": <result>}`.
+    """
     runner = EvaluationRunner(enable_ragas=True)
     result = await runner.aevaluate_single(input_data)
     _EVALUATION_RESULTS[result.sample_id] = result.model_dump(mode="json")
@@ -22,6 +36,17 @@ async def run_evaluation(input_data: EvaluationInput, _: None = Depends(require_
 
 @router.get("/{run_id}")
 async def get_evaluation(run_id: str, _: None = Depends(require_api_auth)) -> JSONResponse:
+    """Fetch a previously computed evaluation result.
+
+    Args:
+      run_id: The `sample_id` of a result produced by `run_evaluation`.
+
+    Returns:
+      A JSON response with `{"success": True, "data": <result>}`.
+
+    Raises:
+      HTTPException: With status 404 if no result is cached for `run_id`.
+    """
     result = _EVALUATION_RESULTS.get(run_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Evaluation result not found")
@@ -30,6 +55,19 @@ async def get_evaluation(run_id: str, _: None = Depends(require_api_auth)) -> JS
 
 @router.get("/history/{history_id}")
 async def evaluate_history(history_id: str, _: None = Depends(require_api_auth)) -> JSONResponse:
+    """Run a RAGAS evaluation against a saved history entry's report.
+
+    Args:
+      history_id: The history entry id whose stored query/report should
+        be evaluated.
+
+    Returns:
+      A JSON response with `{"success": True, "data": <result>}`.
+
+    Raises:
+      HTTPException: With status 404 if no history entry matches
+        `history_id`.
+    """
     entry = await deps.run_sync(deps.history_manager.get_entry, history_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="History entry not found")

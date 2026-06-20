@@ -19,7 +19,19 @@ class LLMProvider(Protocol):
         messages: list[dict[str, Any]],
         stream: bool,
         websocket: Any = None,
-    ) -> str: ...
+    ) -> str:
+        """Return the completion text for the given messages.
+
+        Args:
+          messages: Chat messages in OpenAI-style role/content dict form.
+          stream: If True, streams partial output to `websocket` (or logs
+            it) as it arrives.
+          websocket: Optional WebSocket to stream partial output to.
+
+        Returns:
+          The completion text returned by the provider.
+        """
+        ...
 
 
 async def stream_llm_response(
@@ -27,10 +39,21 @@ async def stream_llm_response(
     messages: list[dict[str, Any]],
     websocket: Any = None,
 ) -> str:
-    """Shared streaming logic for LLM providers.
+    """Stream a chat completion from a LangChain chat model.
 
     Buffers content and flushes on newline boundaries to provide
     smooth streaming to the client while avoiding per-token overhead.
+
+    Args:
+      llm: A LangChain chat model exposing an `astream()` async generator.
+      messages: Chat messages in LangChain or role/content dict form,
+        as accepted by `llm.astream()`.
+      websocket: Optional WebSocket to send `{"type": "report", "output":
+        ...}` chunks to as they are flushed. If None, chunks are logged
+        instead.
+
+    Returns:
+      The full concatenated completion text.
     """
     paragraph = ""
     response = ""

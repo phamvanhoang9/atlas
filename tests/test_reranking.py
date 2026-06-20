@@ -1,9 +1,13 @@
+"""Tests for `CrossEncoderReranker`: disabled passthrough vs. model-driven reranking."""
+
 from types import SimpleNamespace
 
 from src.rag.reranking import CrossEncoderReranker
 
 
 class FakeCrossEncoder:
+    """Stub cross-encoder that scores documents containing "weak" lower."""
+
     def predict(self, pairs: list[tuple[str, str]]) -> list[float]:
         return [0.1 if "weak" in pair[1] else 0.9 for pair in pairs]
 

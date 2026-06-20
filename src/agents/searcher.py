@@ -44,6 +44,20 @@ def _max_urls_for_mode(report_type: str) -> int:
 
 
 async def _parallel_search(queries, retriever_name, max_results=7, ws=None, include_domains=None):
+    """Run one retriever search per query concurrently and collect the results.
+
+    Args:
+      queries: Search queries to run, one task per query.
+      retriever_name: Name passed to `_get_retriever` to select the search backend.
+      max_results: Maximum results requested per query.
+      ws: Optional websocket for streaming progress logs.
+      include_domains: Optional domain allowlist forwarded to the retriever.
+
+    Returns:
+      A dict mapping each query to its list of search results. Queries whose
+      search raised an exception are omitted rather than included with an
+      empty list, so callers can distinguish "no results" from "failed".
+    """
     logger.info("Parallel search start queries=%s retriever=%s max_results=%s", len(queries), retriever_name, max_results)
 
     async def _one(q):

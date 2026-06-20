@@ -1,3 +1,10 @@
+"""Shared pytest configuration for the ATLAS test suite.
+
+Disables search cache, embedding cache, and cross-encoder reranking so tests
+run deterministically and without hitting external services, and patches a
+Python 3.12 multiprocess shutdown crash before RAGAS/datasets can trigger it.
+"""
+
 import os
 
 # Disable caches/reranking BEFORE importing anything from `src`: `src/__init__`
@@ -16,6 +23,11 @@ patch_multiprocess_resource_tracker()
 
 
 def pytest_configure() -> None:
+    """Re-assert the cache/reranking defaults once pytest's config is loaded.
+
+    Belt-and-suspenders alongside the module-level `os.environ.setdefault`
+    calls above, which run before `src` is imported.
+    """
     os.environ.setdefault("ENABLE_SEARCH_CACHE", "false")
     os.environ.setdefault("ENABLE_EMBEDDING_CACHE", "false")
     os.environ.setdefault("ENABLE_CROSS_ENCODER_RERANKING", "false")

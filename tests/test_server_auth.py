@@ -1,3 +1,5 @@
+"""Tests for HTTP/WebSocket auth gating and a full sample research flow over `/ws`."""
+
 from fastapi.testclient import TestClient
 from pathlib import Path
 from uuid import uuid4
@@ -12,6 +14,8 @@ app = server.app
 
 
 class FakeWebSocketManager:
+    """Stand-in for `transport.manager` that streams canned messages instead of researching."""
+
     def __init__(self) -> None:
         self.suggested_questions = {}
 

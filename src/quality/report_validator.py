@@ -1,3 +1,11 @@
+"""Lightweight, deterministic grounding check for generated reports.
+
+Validates a generated report against its source context by comparing cited
+URLs and checking basic length/content heuristics. Produces a 0-1 score and
+pass/fail warnings used to flag reports that may be ungrounded or too thin,
+without requiring an LLM call.
+"""
+
 from __future__ import annotations
 
 import re
@@ -10,6 +18,17 @@ URL_PATTERN = re.compile(r"https?://[^\s)\]>\"']+")
 
 @dataclass(frozen=True)
 class ReportQuality:
+    """The grounding/quality verdict produced by ReportValidator.validate.
+
+    Attributes:
+      passed: Whether the report meets min_score and has no ungrounded URLs.
+      score: Weighted 0-1 quality score (grounding, citation presence, length).
+      report_url_count: Number of distinct URLs found in the report text.
+      context_url_count: Number of distinct URLs found in the source context.
+      grounded_url_count: Report URLs that also appear in the context.
+      warnings: Human-readable (Vietnamese) warning messages, if any.
+    """
+
     passed: bool
     score: float
     report_url_count: int
@@ -18,10 +37,13 @@ class ReportQuality:
     warnings: list[str]
 
     def to_dict(self) -> dict[str, Any]:
+        """Return the dataclass fields as a plain dict for JSON serialization."""
         return asdict(self)
 
 
 class ReportValidator:
+    """Deterministic, LLM-free validator that scores a report's grounding in its context."""
+
     min_score: float = 0.7
 
     def _extract_urls(self, text: str) -> set[str]:
@@ -31,6 +53,16 @@ class ReportValidator:
         return "\n\n".join(str(item) for item in context)
 
     def validate(self, report: str, context: Sequence[Any]) -> ReportQuality:
+        """Score a report's grounding against its source context.
+
+        Args:
+          report: The generated report text to validate.
+          context: The source documents/chunks the report was generated from;
+            each item is stringified before URL extraction.
+
+        Returns:
+          A ReportQuality with the computed score, warnings, and pass/fail verdict.
+        """
         context_text = self._context_text(context)
         report_urls = self._extract_urls(report)
         context_urls = self._extract_urls(context_text)

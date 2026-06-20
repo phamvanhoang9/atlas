@@ -1,3 +1,11 @@
+"""Pydantic schemas for the RAG quality evaluation pipeline.
+
+Defines the input/output contracts shared across src/quality/evaluation/:
+the sample to evaluate (EvaluationInput), the per-metric verdict
+(MetricResult), the aggregated verdict (EvaluationResult), and the
+pass/warn/fail thresholds (EvaluationThresholds) used to label scores.
+"""
+
 from __future__ import annotations
 
 from typing import Any, Literal
@@ -10,6 +18,8 @@ MetricLabel = Literal["pass", "warn", "fail", "skipped"]
 
 
 class EvaluationRubric(BaseModel):
+    """Per-sample grading rules: required/forbidden content, domain, and language."""
+
     model_config = ConfigDict(extra="allow")
 
     must_include: list[str] = Field(default_factory=list)
@@ -21,6 +31,8 @@ class EvaluationRubric(BaseModel):
 
 
 class RetrievedContext(BaseModel):
+    """A single retrieved document/chunk, with its optional source and rank."""
+
     model_config = ConfigDict(extra="allow")
 
     id: str
@@ -33,6 +45,8 @@ class RetrievedContext(BaseModel):
 
 
 class GeneratedOutput(BaseModel):
+    """The model's generated answer along with its citations and language."""
+
     model_config = ConfigDict(extra="allow")
 
     response: str
@@ -42,6 +56,8 @@ class GeneratedOutput(BaseModel):
 
 
 class EvaluationThresholds(BaseModel):
+    """Pass/warn cutoffs applied when labeling each metric's score."""
+
     model_config = ConfigDict(extra="allow")
 
     min_faithfulness: float = 0.85
@@ -55,6 +71,8 @@ class EvaluationThresholds(BaseModel):
 
 
 class EvaluationInput(BaseModel):
+    """One evaluation sample: a query, its retrieved contexts, and the generated answer."""
+
     model_config = ConfigDict(extra="allow")
 
     sample_id: str | None = None
@@ -71,6 +89,8 @@ class EvaluationInput(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 class MetricResult(BaseModel):
+    """The score, label, and supporting evidence for a single evaluation metric."""
+
     model_config = ConfigDict(extra="allow")
 
     name: str
@@ -83,6 +103,8 @@ class MetricResult(BaseModel):
 
 
 class EvaluationResult(BaseModel):
+    """The aggregated verdict for one EvaluationInput, combining all metric results."""
+
     model_config = ConfigDict(extra="allow")
 
     sample_id: str
