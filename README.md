@@ -178,8 +178,7 @@ automation in `src/automation`. Add tests for behavior changes; never commit
 
 ## Acknowledgements
 
-Originally inspired by [GPT Researcher](https://github.com/assafelovic/gpt-researcher).
-ATLAS diverges with an AI-domain scope gate, a deterministic source-quality system,
+Originally inspired by [GPT Researcher](https://github.com/assafelovic/gpt-researcher) - the first open deep research agent designed for both web and local research on any given task. ATLAS diverges with an AI-domain scope gate, a deterministic source-quality system,
 rebuilt verifiable citations, daily intelligence automation, and an evaluation
 harness.
 
