@@ -29,10 +29,6 @@ ENV/
 
 # Testing
 .pytest_cache/
-.pytest_tmp/
-pytest_tmp_work/
-manual_tmp_check/
-scratch/
 .coverage
 .coverage.*
 htmlcov/
@@ -93,34 +89,14 @@ node_modules/
 npm-debug.log
 yarn-error.log
 
-# CI configs not used in this repo
-.gitlab-ci.yml
-.travis.yml
-Jenkinsfile
+# Security scanning
+.gitleaks.toml
+.semgrep.yml
+semgrep-rules/
 
-# Project: local data, caches, and generated artifacts
-.atlas_cache/
-.atlas_data/
-.codegraph/
-.gitnexus/
-.ruff_cache/
-.superpowers/
-outputs/
-history.json
-learning/
-evals/
-scripts/
-visualization/
+# Security reports and requirements
+requirements-security.txt
+docs/security/
 
-# Project: local-only config and docs
-.claude/
-CLAUDE.md
-AGENTS.md
-config.json
-!config.json.example
-docs/agent-memory/
-docs/superpowers/
-docs/session-context.md
-
-# Project: local-only entry points
-run_benchmark.py
+# CI/CD
+.github/workflows/security-gate.yml
