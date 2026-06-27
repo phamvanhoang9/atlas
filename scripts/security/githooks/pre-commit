@@ -1,0 +1,31 @@
+#!/bin/sh
+# ATLAS pre-commit security gate.
+# Installed via scripts/security/install_git_hooks.sh (sets core.hooksPath).
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+PYTHON="$REPO_ROOT/.venv/Scripts/python.exe"
+if [ ! -f "$PYTHON" ]; then
+    PYTHON="$REPO_ROOT/.venv/bin/python"
+fi
+if [ ! -f "$PYTHON" ]; then
+    PYTHON="python"
+fi
+
+CHANGED_PY="$(git diff --cached --name-only --diff-filter=ACMR -- '*.py' || true)"
+
+echo "[security] running pre-commit security gate..."
+if [ -n "$CHANGED_PY" ]; then
+    "$PYTHON" "$REPO_ROOT/scripts/security/security_gate.py" --stage commit --files $CHANGED_PY
+else
+    "$PYTHON" "$REPO_ROOT/scripts/security/security_gate.py" --stage commit
+fi
+STATUS=$?
+
+if [ $STATUS -ne 0 ]; then
+    echo ""
+    echo "[security] BLOCKED: commit fails the security gate. See security-reports/security-report.md"
+    exit 1
+fi
+
+exit 0
