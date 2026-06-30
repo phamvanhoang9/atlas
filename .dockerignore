@@ -1,7 +1,16 @@
 # =============================================================================
 # Docker Build Context Exclusions
 # This file reduces build context size and speeds up builds
+#
+# IMPORTANT: bare patterns like `*.sqlite` only match at the build-context
+# ROOT in Docker's ignore matcher (unlike .gitignore, this is NOT recursive).
+# Every pattern that must apply at any depth needs a `**/` prefix too.
 # =============================================================================
+
+# Runtime data directories (bind-mounted by docker-compose; never bake into image)
+.atlas_cache/
+.atlas_data/
+outputs/
 
 # Python virtual environments
 .venv/
@@ -9,9 +18,13 @@ venv/
 env/
 ENV/
 *.pyc
+**/*.pyc
 __pycache__/
+**/__pycache__/
 *.pyo
+**/*.pyo
 *.pyd
+**/*.pyd
 .Python
 
 # Python distribution / packaging
@@ -31,17 +44,22 @@ wheels/
 pip-wheel-metadata/
 share/python-wheels/
 *.egg-info/
+**/*.egg-info/
 .installed.cfg
 *.egg
+**/*.egg
 MANIFEST
 
 # IDE and editor files
 .vscode/
 .idea/
 *.swp
+**/*.swp
 *.swo
+**/*.swo
 *~
 .DS_Store
+**/.DS_Store
 *.sublime-project
 *.sublime-workspace
 
@@ -59,6 +77,7 @@ docker-compose*.yml
 # Documentation (can be excluded from runtime)
 docs/
 *.md
+**/*.md
 README*
 LICENSE
 CHANGELOG*
@@ -69,15 +88,20 @@ images/
 # Testing and development
 tests/
 test_*.py
+**/test_*.py
 *_test.py
+**/*_test.py
 .pytest_cache/
+**/.pytest_cache/
 .coverage
+**/.coverage
 .coverage.*
 htmlcov/
 .tox/
 .nox/
 coverage.xml
 *.cover
+**/*.cover
 .hypothesis/
 
 # CI/CD
@@ -90,18 +114,25 @@ Jenkinsfile
 .env
 .env.*
 *.env
+**/*.env
 .envrc
 
 # Logs and temporary files
 *.log
+**/*.log
 logs/
 *.tmp
+**/*.tmp
 *.temp
+**/*.temp
 .cache/
+**/.cache/
 
 # OS-specific files
 Thumbs.db
+**/Thumbs.db
 Desktop.ini
+**/Desktop.ini
 
 # Project-specific exclusions
 outputs/*.md
@@ -111,17 +142,33 @@ learning/
 examples/
 visualization/
 
-# Large binary files (if any)
+# Large binary files (if any) — these matter most: dev caches/DBs can be GBs
 *.sqlite
+**/*.sqlite
 *.db
+**/*.db
 *.pkl
+**/*.pkl
 *.pickle
+**/*.pickle
 
 # Jupyter notebooks (if not needed in production)
 *.ipynb
+**/*.ipynb
 .ipynb_checkpoints/
+**/.ipynb_checkpoints/
 
 # Node modules (if any frontend tooling)
 node_modules/
+**/node_modules/
 npm-debug.log
 yarn-error.log
+
+# Local agent/tooling metadata (not needed at runtime)
+.claude/
+.codegraph/
+.gitnexus/
+.superpowers/
+.ruff_cache/
+**/.ruff_cache/
+security-reports/

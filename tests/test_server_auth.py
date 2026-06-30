@@ -32,6 +32,16 @@ class FakeWebSocketManager:
         return "# Báo cáo mẫu\nNội dung mẫu."
 
 
+def test_root_page_renders_index_template(monkeypatch):
+    monkeypatch.delenv("ATLAS_AUTH_TOKEN", raising=False)
+    client = TestClient(app)
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+
+
 def test_history_api_allows_requests_when_auth_disabled(monkeypatch):
     monkeypatch.delenv("ATLAS_AUTH_TOKEN", raising=False)
     client = TestClient(app)

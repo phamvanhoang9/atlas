@@ -123,7 +123,7 @@ def create_app() -> FastAPI:
 
     @app.get("/")
     async def read_root(request: Request):
-        return deps.templates.TemplateResponse("index.html", {"request": request, "report": None})
+        return deps.templates.TemplateResponse(request, "index.html", {"report": None})
 
     @app.get("/health")
     async def health_check() -> dict[str, str]:

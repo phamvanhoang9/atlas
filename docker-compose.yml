@@ -19,7 +19,7 @@ services:
 
     # Expose on all interfaces for easy LAN access during development
     ports:
-      - "8000:8000"
+      - "8080:8000"
 
     # Persist generated reports, history DB, and caches across restarts
     volumes:

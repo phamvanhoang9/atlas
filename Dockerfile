@@ -31,9 +31,13 @@ ENV PATH="/opt/venv/bin:$PATH"
 # (Dependencies change less frequently than application code)
 COPY requirements.txt .
 
-# Install Python dependencies in the virtual environment
+# Install CPU-only torch first so the sentence-transformers dependency below
+# resolves against it instead of pulling PyPI's default CUDA build (which
+# drags in ~4.6GB of unused nvidia/* and triton GPU packages in this
+# CPU-only container).
 RUN pip install --upgrade pip setuptools wheel && \
-    pip install -r requirements.txt 
+    pip install torch --index-url https://download.pytorch.org/whl/cpu && \
+    pip install -r requirements.txt
 
 # Production image embeds the local reranker model so runtime does not need
 # network access for cross-encoder reranking.
@@ -49,7 +53,7 @@ FROM python:3.12-slim-bookworm AS runtime
 # Metadata labels for image identification and maintenance
 LABEL maintainer="ATLAS Team" \
       description="Agentic Task & Literature Analysis System" \
-      version="1.0" \
+      version="3.0.0" \
       python.version="3.12"
 
 # Set production environment variables
