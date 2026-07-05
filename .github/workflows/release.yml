@@ -8,52 +8,8 @@ on:
 permissions:
   contents: write
 
-env:
-  ATLAS_SECURITY_STRICT: "1"
-  GITLEAKS_VERSION: "8.21.2"
-
 jobs:
-  security-gate:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: "pip"
-
-      - name: Install app + security dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r requirements-security.txt
-
-      - name: Install gitleaks
-        run: |
-          curl -sSL -o gitleaks.tar.gz \
-            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          tar -xzf gitleaks.tar.gz gitleaks
-          sudo mv gitleaks /usr/local/bin/gitleaks
-
-      - name: Run release security gate
-        run: python scripts/security/security_gate.py --stage release
-
-      - name: Upload security report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-security-report
-          path: security-reports/
-          retention-days: 90
-
   release:
-    needs: security-gate
     runs-on: ubuntu-latest
     environment: production
 

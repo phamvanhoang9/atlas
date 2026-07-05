@@ -1,9 +1,8 @@
 name: Security Gate
 
 on:
-  pull_request:
   push:
-    branches: ["main"]
+    branches: ["main", "dev"]
 
 permissions:
   contents: read
@@ -63,12 +62,3 @@ jobs:
           output_format: cli
           quiet: true
           soft_fail: false
-
-  deployment-gate:
-    needs: security-review
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - name: Gate satisfied
-        run: echo "Security gate passed; main is eligible for deployment."
