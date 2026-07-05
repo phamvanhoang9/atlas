@@ -1,0 +1,6 @@
+# Tooling for scripts/security/security_gate.py and CI.
+# Install: pip install -r requirements-security.txt
+# gitleaks is a Go binary, not on PyPI - install separately (see
+# scripts/security/install_git_hooks.sh / .github/workflows/security-gate.yml).
+semgrep==1.99.0
+pip-audit==2.7.3

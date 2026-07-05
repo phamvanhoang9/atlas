@@ -93,10 +93,3 @@ yarn-error.log
 .gitleaks.toml
 .semgrep.yml
 semgrep-rules/
-
-# Security reports and requirements
-requirements-security.txt
-docs/security/
-
-# CI/CD
-.github/workflows/security-gate.yml
