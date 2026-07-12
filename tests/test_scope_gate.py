@@ -32,7 +32,7 @@ def _state(query: str, **overrides) -> dict:
     )
     state = {
         "query": query,
-        "report_type": "quick",
+        "report_type": "ask",
         "source_urls": [],
         "agent": "",
         "agent_role": "",

@@ -55,7 +55,7 @@ def config_is_complete(config: dict[str, Any]) -> tuple[bool, str]:
     """Return (ok, reason). Email config completeness is checked separately."""
     if not config.get("recipient_email"):
         return False, "recipient_email is not configured"
-    if normalize_mode(config.get("depth", "deep")) not in ("quick", "research", "deep"):
+    if normalize_mode(config.get("depth", "deep_dive")) not in ("ask", "compare", "deep_dive"):
         return False, f"invalid depth {config.get('depth')!r}"
     return True, ""
 
@@ -93,7 +93,7 @@ async def run_daily_report(
 
     date_label = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     query = build_daily_query(config.get("topics", []), date_label)
-    mode = normalize_mode(config.get("depth", "deep"))
+    mode = normalize_mode(config.get("depth", "deep_dive"))
 
     try:
         if researcher_factory is None:

@@ -96,10 +96,10 @@ const Atlas = (() => {
     const t = (k, v) => AtlasI18n.t(k, v);
 
     const MODE_LABEL_KEYS = {
-        quick: "mode.quick", research: "mode.research", deep: "mode.deep",
+        ask: "mode.ask", compare: "mode.compare", deep_dive: "mode.deep_dive",
     };
     const MODE_CLASSES = {
-        quick: "quick", research: "research", deep: "deep",
+        ask: "ask", compare: "compare", deep_dive: "deep_dive",
     };
 
     const converter = AtlasShared.converter();
@@ -217,7 +217,7 @@ const Atlas = (() => {
         "stage.writing": { icon: "📝", order: 7 },
     };
     const STAGE_TOTAL = 7;
-    const MODE_ICONS = { quick: "⚡", research: "📑", deep: "🔬" };
+    const MODE_ICONS = { ask: "⚡", compare: "📑", deep_dive: "🔬" };
 
     const fmtElapsed = (ms) => {
         const s = Math.max(0, Math.floor(ms / 1000));
@@ -232,8 +232,8 @@ const Atlas = (() => {
             turn.badge.className = "mode-badge daily";
             return;
         }
-        turn.badge.textContent = t(MODE_LABEL_KEYS[mode] || "mode.research");
-        turn.badge.className = `mode-badge ${MODE_CLASSES[mode] || "research"}`;
+        turn.badge.textContent = t(MODE_LABEL_KEYS[mode] || "mode.compare");
+        turn.badge.className = `mode-badge ${MODE_CLASSES[mode] || "compare"}`;
     };
 
     const createTurn = (task, mode) => {
@@ -552,7 +552,7 @@ const Atlas = (() => {
         if (running) return;
         const task = el("task").value.trim();
         if (!task) return;
-        const mode = el("reportType").value || "quick";
+        const mode = el("reportType").value || "ask";
 
         if (!currentSessionId) currentSessionId = genId();   // start/continue a conversation
 
@@ -718,7 +718,7 @@ const Atlas = (() => {
     /* ---------- mode selector (in-composer popover, Gemini-style) */
 
     const setMode = (mode) => {
-        const safe = MODE_ICONS[mode] ? mode : "quick";
+        const safe = MODE_ICONS[mode] ? mode : "ask";
         el("reportType").value = safe;
         el("modeBtnIcon").textContent = MODE_ICONS[safe];
         el("modeBtnLabel").textContent = t(`mode.${safe}`);
@@ -746,7 +746,7 @@ const Atlas = (() => {
         document.addEventListener("keydown", (event) => {
             if (event.key === "Escape" && isOpen()) { setOpen(false); btn.focus(); }
         });
-        setMode(el("reportType").value || "quick");
+        setMode(el("reportType").value || "ask");
     };
 
     /* ---------- auto-hiding top bar (reveal on scroll up, hide on scroll down) */
@@ -808,7 +808,7 @@ const Atlas = (() => {
         });
 
         document.addEventListener("atlas:langchange", () => {
-            setMode(el("reportType").value || "quick");
+            setMode(el("reportType").value || "ask");
             relocalizeTurns();
             if (!el("heroState").classList.contains("is-hidden")) renderHero();
         });

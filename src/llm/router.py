@@ -3,7 +3,7 @@
 import logging
 from typing import Optional
 
-from src.modes import DEEP, normalize_mode
+from src.modes import DEEP_DIVE, normalize_mode
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ def route_model(
     if override_model:
         return override_model
 
-    is_complex = normalize_mode(report_type) == DEEP
+    is_complex = normalize_mode(report_type) == DEEP_DIVE
 
     if provider == "google":
         if is_complex:

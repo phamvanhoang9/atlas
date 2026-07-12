@@ -16,10 +16,10 @@ const AtlasHistory = (() => {
     const el = (id) => document.getElementById(id);
 
     const MODE_LABEL_KEYS = {
-        quick: "mode.quick", research: "mode.research", deep: "mode.deep",
+        ask: "mode.ask", compare: "mode.compare", deep_dive: "mode.deep_dive",
     };
     const MODE_CLASSES = {
-        quick: "quick", research: "research", deep: "deep",
+        ask: "ask", compare: "compare", deep_dive: "deep_dive",
     };
 
     /* ---------- data */
@@ -88,10 +88,10 @@ const AtlasHistory = (() => {
             const card = document.createElement("div");
             card.className = "history-item";
 
-            const badgeClass = kind === "daily_report" ? "daily" : (MODE_CLASSES[latest.mode] || "research");
+            const badgeClass = kind === "daily_report" ? "daily" : (MODE_CLASSES[latest.mode] || "compare");
             const badgeText = kind === "daily_report"
                 ? t("badge.daily")
-                : t(MODE_LABEL_KEYS[latest.mode] || "mode.research");
+                : t(MODE_LABEL_KEYS[latest.mode] || "mode.compare");
             const countChip = (group.sessionId && count > 1)
                 ? `<span class="count-chip">${escapeHtml(t("session.turns", { n: count }))}</span>`
                 : "";

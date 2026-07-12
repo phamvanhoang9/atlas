@@ -1,7 +1,13 @@
 """Mode registry — canonical research modes.
 
-Canonical mode ids are the stable technical contract (PRD §5, decision D-004):
-``quick`` (Quick Answer), ``research`` (Research), ``deep`` (Deep Research).
+Canonical mode ids are the stable technical contract (PRD §5, decision
+D-004, superseded 2026-07-12 — see modes_redesign_plan.md Mục 8.1 #4):
+``ask`` (Ask), ``compare`` (Compare), ``deep_dive`` (Deep Dive).
+
+The previous ids (``quick``/``research``/``deep``, and before them the
+Vietnamese product strings) are fully retired — ``normalize_mode()`` does
+not map them to anything; an unknown string just falls back to the
+``compare`` default.
 """
 
 from __future__ import annotations
@@ -9,11 +15,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-QUICK = "quick"
-RESEARCH = "research"
-DEEP = "deep"
+ASK = "ask"
+COMPARE = "compare"
+DEEP_DIVE = "deep_dive"
 
-CANONICAL_MODE_IDS: tuple[str, ...] = (QUICK, RESEARCH, DEEP)
+CANONICAL_MODE_IDS: tuple[str, ...] = (ASK, COMPARE, DEEP_DIVE)
 
 
 @dataclass(frozen=True)
@@ -30,9 +36,9 @@ class ModeSpec:
     priority_note: str
 
 
-# Research mode searches are biased toward high-quality primary sources.
-# Quick/deep search broadly; ranking is handled by the source quality scorer.
-_RESEARCH_INCLUDE_DOMAINS: tuple[str, ...] = (
+# Compare mode searches are biased toward high-quality primary sources.
+# Ask/deep_dive search broadly; ranking is handled by the source quality scorer.
+_COMPARE_INCLUDE_DOMAINS: tuple[str, ...] = (
     "arxiv.org",
     "openreview.net",
     "aclanthology.org",
@@ -52,9 +58,9 @@ _RESEARCH_INCLUDE_DOMAINS: tuple[str, ...] = (
 )
 
 MODES: dict[str, ModeSpec] = {
-    QUICK: ModeSpec(
-        id=QUICK,
-        label="Quick Answer",
+    ASK: ModeSpec(
+        id=ASK,
+        label="Ask",
         description="Fast, source-aware answers for AI questions with citations.",
         report_template="quick_answer",
         url_report_template="quick_answer",
@@ -62,19 +68,19 @@ MODES: dict[str, ModeSpec] = {
         max_scrape_urls=8,
         priority_note="PRIORITY: Speed > Accuracy > Conciseness",
     ),
-    RESEARCH: ModeSpec(
-        id=RESEARCH,
-        label="Research",
+    COMPARE: ModeSpec(
+        id=COMPARE,
+        label="Compare",
         description="Structured analysis grounded in papers, official sources, and technical reports.",
         report_template="research_report",
         url_report_template="research_report",
-        search_include_domains=_RESEARCH_INCLUDE_DOMAINS,
+        search_include_domains=_COMPARE_INCLUDE_DOMAINS,
         max_scrape_urls=24,
         priority_note="PRIORITY: Source quality > Depth > Accuracy",
     ),
-    DEEP: ModeSpec(
-        id=DEEP,
-        label="Deep Research",
+    DEEP_DIVE: ModeSpec(
+        id=DEEP_DIVE,
+        label="Deep Dive",
         description="Multi-step research with impact analysis, contradiction checks, and confidence levels.",
         report_template="deep_research",
         url_report_template="source_analysis",
@@ -90,11 +96,13 @@ def is_known_mode(mode: str | None) -> bool:
     return bool(mode) and mode in MODES
 
 
-def normalize_mode(mode: str | None, default: str = RESEARCH) -> str:
+def normalize_mode(mode: str | None, default: str = COMPARE) -> str:
     """Return *mode* if it is a canonical id, else *default*.
 
     Unknown values fall back to *default* so internal report_type values that
-    predate the registry (e.g. "research_report") degrade gracefully.
+    predate the registry (e.g. "research_report"), and retired mode ids
+    (Vietnamese product strings, or the old quick/research/deep ids),
+    degrade gracefully.
     """
     if mode in MODES:
         return mode

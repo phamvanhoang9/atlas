@@ -412,7 +412,7 @@ async def generate_report_node(state: ResearchState) -> dict[str, Any]:
     try:
         has_urls = bool(state.get("source_urls"))
         generate_prompt = get_report_by_type(state["report_type"], has_source_urls=has_urls)
-        if canonical_mode == "deep":
+        if canonical_mode == "deep_dive":
             # Deep research uses its strict analyst role rather than the
             # LLM-selected agent persona.
             role = system_role_for_mode(state["report_type"], has_urls)

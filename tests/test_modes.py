@@ -5,11 +5,11 @@ from unittest.mock import MagicMock, patch
 from src.config.config import Config
 from src.llm.router import route_model
 from src.modes import (
+    ASK,
     CANONICAL_MODE_IDS,
-    DEEP,
+    COMPARE,
+    DEEP_DIVE,
     MODES,
-    QUICK,
-    RESEARCH,
     get_mode_spec,
     is_known_mode,
     normalize_mode,
@@ -17,7 +17,7 @@ from src.modes import (
 
 
 def test_canonical_modes_are_registered() -> None:
-    assert CANONICAL_MODE_IDS == ("quick", "research", "deep")
+    assert CANONICAL_MODE_IDS == ("ask", "compare", "deep_dive")
     for mode_id in CANONICAL_MODE_IDS:
         assert MODES[mode_id].id == mode_id
 
@@ -25,11 +25,23 @@ def test_canonical_modes_are_registered() -> None:
 def test_legacy_vn_mode_ids_no_longer_resolve() -> None:
     # The old Vietnamese product mode strings were retired (decision D-004);
     # they must now fall through to the default like any unknown string.
-    assert normalize_mode("hỏi đáp") == RESEARCH
-    assert normalize_mode("đề xuất bài báo") == RESEARCH
-    assert normalize_mode("phân tích") == RESEARCH
+    assert normalize_mode("hỏi đáp") == COMPARE
+    assert normalize_mode("đề xuất bài báo") == COMPARE
+    assert normalize_mode("phân tích") == COMPARE
     assert not is_known_mode("hỏi đáp")
     assert not is_known_mode("phân tích")
+
+
+def test_legacy_english_mode_ids_no_longer_resolve() -> None:
+    # 2026-07-12: quick/research/deep were retired in favor of
+    # ask/compare/deep_dive (decision D-004 superseded, no back-compat shim
+    # kept — see modes_redesign_plan.md Mục 8.1 #4).
+    assert normalize_mode("quick") == COMPARE
+    assert normalize_mode("research") == COMPARE
+    assert normalize_mode("deep") == COMPARE
+    assert not is_known_mode("quick")
+    assert not is_known_mode("research")
+    assert not is_known_mode("deep")
 
 
 def test_canonical_ids_normalize_to_themselves() -> None:
@@ -38,9 +50,9 @@ def test_canonical_ids_normalize_to_themselves() -> None:
 
 
 def test_unknown_mode_falls_back_to_default() -> None:
-    assert normalize_mode("research_report") == RESEARCH
-    assert normalize_mode(None) == RESEARCH
-    assert normalize_mode("custom_report", default=QUICK) == QUICK
+    assert normalize_mode("research_report") == COMPARE
+    assert normalize_mode(None) == COMPARE
+    assert normalize_mode("custom_report", default=ASK) == ASK
 
 
 def test_is_known_mode() -> None:
@@ -52,22 +64,22 @@ def test_is_known_mode() -> None:
 
 
 def test_mode_specs_have_distinct_behavior() -> None:
-    quick, research, deep = MODES[QUICK], MODES[RESEARCH], MODES[DEEP]
+    ask, compare, deep_dive = MODES[ASK], MODES[COMPARE], MODES[DEEP_DIVE]
 
     # Distinct report templates per mode.
-    assert len({quick.report_template, research.report_template, deep.report_template}) == 3
-    # Research restricts to high-quality domains; quick and deep search broadly.
-    assert research.search_include_domains
-    assert quick.search_include_domains is None
-    assert deep.search_include_domains is None
-    # Deep research with provided URLs switches to source analysis.
-    assert deep.url_report_template == "source_analysis"
-    assert deep.url_report_template != deep.report_template
+    assert len({ask.report_template, compare.report_template, deep_dive.report_template}) == 3
+    # Compare restricts to high-quality domains; ask and deep_dive search broadly.
+    assert compare.search_include_domains
+    assert ask.search_include_domains is None
+    assert deep_dive.search_include_domains is None
+    # Deep dive with provided URLs switches to source analysis.
+    assert deep_dive.url_report_template == "source_analysis"
+    assert deep_dive.url_report_template != deep_dive.report_template
 
 
 def test_get_mode_spec_falls_back_for_unknown_strings() -> None:
-    assert get_mode_spec("phân tích") is MODES[RESEARCH]
-    assert get_mode_spec("deep") is MODES[DEEP]
+    assert get_mode_spec("phân tích") is MODES[COMPARE]
+    assert get_mode_spec("deep_dive") is MODES[DEEP_DIVE]
 
 
 def test_apply_mode_config_accepts_canonical_ids() -> None:
@@ -75,11 +87,11 @@ def test_apply_mode_config_accepts_canonical_ids() -> None:
         with patch("json.load", return_value={}):
             config = Config()
 
-            config.apply_mode_config("quick")
+            config.apply_mode_config("ask")
             assert config.max_iterations == 1
             assert config.total_words == 700
 
-            config.apply_mode_config("deep")
+            config.apply_mode_config("deep_dive")
             assert config.max_iterations == 5
             assert config.total_words == 3000
 
@@ -93,17 +105,17 @@ def test_mode_profiles_scale_with_depth() -> None:
                 config.apply_mode_config(mode_id)
                 profiles[mode_id] = (config.max_iterations, config.token_limit, config.total_words)
 
-    assert profiles["quick"] < profiles["research"] < profiles["deep"]
+    assert profiles["ask"] < profiles["compare"] < profiles["deep_dive"]
 
 
-def test_route_model_upgrades_deep_mode() -> None:
-    assert route_model("deep", "gpt-4o-mini", "openai") == "gpt-4o"
-    assert route_model("deep", "gemini-1.5-flash", "google") == "gemini-1.5-pro"
+def test_route_model_upgrades_deep_dive_mode() -> None:
+    assert route_model("deep_dive", "gpt-4o-mini", "openai") == "gpt-4o"
+    assert route_model("deep_dive", "gemini-1.5-flash", "google") == "gemini-1.5-pro"
 
     # Simpler modes keep the requested (cheap) model.
-    assert route_model("quick", "gpt-4o-mini", "openai") == "gpt-4o-mini"
-    assert route_model("research", "gpt-4o-mini", "openai") == "gpt-4o-mini"
-    assert route_model("quick", "gemini-1.5-pro", "google") == "gemini-1.5-flash"
+    assert route_model("ask", "gpt-4o-mini", "openai") == "gpt-4o-mini"
+    assert route_model("compare", "gpt-4o-mini", "openai") == "gpt-4o-mini"
+    assert route_model("ask", "gemini-1.5-pro", "google") == "gemini-1.5-flash"
 
     # Explicit override always wins.
-    assert route_model("deep", "gpt-4o-mini", "openai", override_model="o3") == "o3"
+    assert route_model("deep_dive", "gpt-4o-mini", "openai", override_model="o3") == "o3"

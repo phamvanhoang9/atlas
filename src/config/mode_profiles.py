@@ -1,11 +1,12 @@
 """Mode-specific runtime profile overrides.
 
-Keys are canonical mode ids (``quick`` / ``research`` / ``deep``, decision
-D-004). Resolution happens via ``src.modes.normalize_mode`` in
+Keys are canonical mode ids (``ask`` / ``compare`` / ``deep_dive``, decision
+D-004, superseded 2026-07-12 — see modes_redesign_plan.md Mục 8.1 #4).
+Resolution happens via ``src.modes.normalize_mode`` in
 ``Config.apply_mode_config``.
 """
 
-_QUICK_PROFILE = {
+_ASK_PROFILE = {
     "max_iterations": 1,
     "max_search_results_per_query": 6,
     "token_limit": 3000,
@@ -16,7 +17,7 @@ _QUICK_PROFILE = {
     "similarity_threshold": 0.35,
 }
 
-_RESEARCH_PROFILE = {
+_COMPARE_PROFILE = {
     "max_iterations": 3,
     "max_search_results_per_query": 7,
     "token_limit": 8000,
@@ -27,7 +28,7 @@ _RESEARCH_PROFILE = {
     "enable_parallel_search": True,
 }
 
-_DEEP_PROFILE = {
+_DEEP_DIVE_PROFILE = {
     "max_iterations": 5,
     "max_search_results_per_query": 7,
     "token_limit": 12000,
@@ -39,7 +40,7 @@ _DEEP_PROFILE = {
 }
 
 MODE_CONFIGS = {
-    "quick": _QUICK_PROFILE,
-    "research": _RESEARCH_PROFILE,
-    "deep": _DEEP_PROFILE,
+    "ask": _ASK_PROFILE,
+    "compare": _COMPARE_PROFILE,
+    "deep_dive": _DEEP_DIVE_PROFILE,
 }

@@ -253,9 +253,9 @@ async def evaluate_state_node(state: dict[str, Any]) -> dict[str, Any]:
         return state
 
     _MODE_DOMAINS = {
-        "quick": "qa",
-        "deep": "deep_analysis",
-        "research": "paper_recommendation",
+        "ask": "qa",
+        "deep_dive": "deep_analysis",
+        "compare": "paper_recommendation",
     }
 
     try:
@@ -440,7 +440,7 @@ def _build_llm_judge_from_config(cfg: Any) -> Callable[[str], Awaitable[str]] | 
             temperature=0.0,
             max_tokens=4096,
             stream=False,
-            report_type="deep",
+            report_type="deep_dive",
             llm_kwargs=getattr(cfg, "llm_kwargs", {}),
         )
 
@@ -485,7 +485,7 @@ def _build_llm_translator_from_config(cfg: Any) -> Callable[[str], Awaitable[str
             temperature=0.0,
             max_tokens=256,
             stream=False,
-            report_type="quick",
+            report_type="ask",
             llm_kwargs=getattr(cfg, "llm_kwargs", {}),
         )
 

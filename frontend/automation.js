@@ -33,7 +33,7 @@ const AtlasAutomation = (() => {
         el("autoTimezone").value = config.timezone || "";
         el("autoEmail").value = config.recipient_email || "";
         el("autoTopics").value = (config.topics || []).join("\n");
-        el("autoDepth").value = config.depth || "deep";
+        el("autoDepth").value = config.depth || "deep_dive";
         lastEmailMode = config.email_mode || "mock";
         applyEmailChip();
     };

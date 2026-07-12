@@ -72,6 +72,19 @@ class SQLiteHistoryManager:
                 connection.execute(
                     "ALTER TABLE history ADD COLUMN session_id TEXT NOT NULL DEFAULT ''"
                 )
+            # org_id/workspace_id: multi-tenant hook (nullable — no org/workspace
+            # concept exists yet), default 'personal' so existing single-tenant
+            # rows and callers keep working unchanged. SQLite's ALTER TABLE ADD
+            # COLUMN backfills this default into every pre-existing row, so no
+            # legacy row is ever left NULL.
+            if "org_id" not in columns:
+                connection.execute(
+                    "ALTER TABLE history ADD COLUMN org_id TEXT DEFAULT 'personal'"
+                )
+            if "workspace_id" not in columns:
+                connection.execute(
+                    "ALTER TABLE history ADD COLUMN workspace_id TEXT DEFAULT 'personal'"
+                )
             connection.execute("CREATE INDEX IF NOT EXISTS idx_history_timestamp ON history(timestamp DESC)")
 
     def _row_to_entry(self, row: sqlite3.Row) -> dict[str, Any]:
@@ -88,6 +101,8 @@ class SQLiteHistoryManager:
             "evaluation_result": json.loads(row["evaluation_result"]),
             "kind": row["kind"] if "kind" in keys else "chat",
             "session_id": row["session_id"] if "session_id" in keys else "",
+            "org_id": (row["org_id"] if "org_id" in keys else None) or "personal",
+            "workspace_id": (row["workspace_id"] if "workspace_id" in keys else None) or "personal",
         }
 
     def add_entry(
@@ -100,12 +115,14 @@ class SQLiteHistoryManager:
         evaluation_result: Optional[dict[str, Any]] = None,
         kind: str = "chat",
         session_id: str = "",
+        org_id: str = "personal",
+        workspace_id: str = "personal",
     ) -> str:
         """Insert a new history entry.
 
         Args:
           query: The research query text.
-          mode: The research mode id (e.g. `quick`, `research`, `deep`).
+          mode: The research mode id (e.g. `ask`, `compare`, `deep_dive`).
           report: The generated report text, used to derive the preview.
           suggested_questions: Follow-up questions to store alongside the
             entry. Defaults to an empty list.
@@ -114,6 +131,9 @@ class SQLiteHistoryManager:
             Defaults to an empty dict.
           kind: The entry kind (e.g. `chat`, `automation`).
           session_id: Identifier linking this entry to a chat session.
+          org_id: Multi-tenant hook; no org concept exists yet, so this is
+            `"personal"` for every caller today.
+          workspace_id: Multi-tenant hook; `"personal"` for every caller today.
 
         Returns:
           The newly generated entry id (a UUID4 string).
@@ -125,8 +145,8 @@ class SQLiteHistoryManager:
                 """
                 INSERT INTO history (
                     id, timestamp, query, mode, report, suggested_questions, pdf_path, preview,
-                    evaluation_result, kind, session_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    evaluation_result, kind, session_id, org_id, workspace_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     entry_id,
@@ -140,6 +160,8 @@ class SQLiteHistoryManager:
                     json.dumps(evaluation_result or {}, ensure_ascii=False),
                     kind,
                     session_id or "",
+                    org_id or "personal",
+                    workspace_id or "personal",
                 ),
             )
         return entry_id

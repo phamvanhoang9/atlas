@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any, Iterable
 
-from src.modes import DEEP, RESEARCH, normalize_mode
+from src.modes import COMPARE, DEEP_DIVE, normalize_mode
 
 
 def _clean_text(value: str) -> str:
@@ -52,9 +52,9 @@ def build_mode_context(
         `source_category_label`.
       query: The research query the context is being assembled for; included
         in each source section for downstream relevance grounding.
-      report_type: Mode identifier (e.g. "quick", "research", "deep") used to
-        select default document/character caps when explicit overrides are
-        not provided.
+      report_type: Mode identifier (e.g. "ask", "compare", "deep_dive") used
+        to select default document/character caps when explicit overrides
+        are not provided.
       max_documents: Maximum number of top-ranked documents to include.
         Defaults to a mode-specific value when omitted.
       max_chars_per_document: Maximum characters kept per document before
@@ -71,11 +71,11 @@ def build_mode_context(
         return ""
 
     canonical_mode = normalize_mode(report_type)
-    if canonical_mode == DEEP:
+    if canonical_mode == DEEP_DIVE:
         max_documents = max_documents or 10
         max_chars_per_document = max_chars_per_document or 6000
         max_total_chars = max_total_chars or 50000
-    elif canonical_mode == RESEARCH:
+    elif canonical_mode == COMPARE:
         max_documents = max_documents or 12
         max_chars_per_document = max_chars_per_document or 3500
         max_total_chars = max_total_chars or 35000

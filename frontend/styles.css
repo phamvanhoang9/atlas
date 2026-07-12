@@ -351,9 +351,9 @@ a:hover { text-decoration: underline; }
     color: var(--accent-ink);
     letter-spacing: .01em;
 }
-.mode-badge.quick { background: var(--amber-soft); color: var(--amber); }
-.mode-badge.research { background: var(--accent-soft); color: var(--accent-ink); }
-.mode-badge.deep { background: var(--purple-soft); color: var(--purple); }
+.mode-badge.ask { background: var(--amber-soft); color: var(--amber); }
+.mode-badge.compare { background: var(--accent-soft); color: var(--accent-ink); }
+.mode-badge.deep_dive { background: var(--purple-soft); color: var(--purple); }
 .mode-badge.daily { background: var(--green-soft); color: var(--green); }
 
 /* mini progress inside an answer */

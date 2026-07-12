@@ -20,11 +20,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "time": "05:00",
     "timezone": "UTC",
     "recipient_email": "",
-    "depth": "deep",
+    "depth": "deep_dive",
     "topics": [],
 }
 
-VALID_DEPTHS = ("quick", "research", "deep")
+VALID_DEPTHS = ("ask", "compare", "deep_dive")
 
 
 class AutomationStore:
@@ -51,7 +51,7 @@ class AutomationStore:
                     time TEXT NOT NULL DEFAULT '05:00',
                     timezone TEXT NOT NULL DEFAULT 'UTC',
                     recipient_email TEXT NOT NULL DEFAULT '',
-                    depth TEXT NOT NULL DEFAULT 'deep',
+                    depth TEXT NOT NULL DEFAULT 'deep_dive',
                     topics TEXT NOT NULL DEFAULT '[]',
                     last_attempted_date TEXT NOT NULL DEFAULT '',
                     updated_at TEXT NOT NULL DEFAULT ''

@@ -318,9 +318,9 @@ def test_build_daily_query_includes_topics_and_sections() -> None:
 
 
 def test_config_completeness_check() -> None:
-    ok, reason = config_is_complete({"recipient_email": "", "depth": "deep"})
+    ok, reason = config_is_complete({"recipient_email": "", "depth": "deep_dive"})
     assert not ok and "recipient_email" in reason
-    ok, _ = config_is_complete({"recipient_email": "a@b.co", "depth": "deep"})
+    ok, _ = config_is_complete({"recipient_email": "a@b.co", "depth": "deep_dive"})
     assert ok
 
 

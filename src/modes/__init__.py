@@ -1,11 +1,11 @@
 """Canonical research mode registry."""
 
 from src.modes.registry import (
+    ASK,
     CANONICAL_MODE_IDS,
-    DEEP,
+    COMPARE,
+    DEEP_DIVE,
     MODES,
-    QUICK,
-    RESEARCH,
     ModeSpec,
     get_mode_spec,
     is_known_mode,
@@ -13,11 +13,11 @@ from src.modes.registry import (
 )
 
 __all__ = [
+    "ASK",
     "CANONICAL_MODE_IDS",
-    "DEEP",
+    "COMPARE",
+    "DEEP_DIVE",
     "MODES",
-    "QUICK",
-    "RESEARCH",
     "ModeSpec",
     "get_mode_spec",
     "is_known_mode",

@@ -74,13 +74,13 @@ def test_apply_mode_config():
         with patch("json.load", return_value={}):
             config = Config()
 
-            # Test 'quick' mode
-            config.apply_mode_config("quick")
+            # Test 'ask' mode
+            config.apply_mode_config("ask")
             assert config.max_iterations == 1
             assert config.total_words == 700
 
-            # Test 'deep' mode
-            config.apply_mode_config("deep")
+            # Test 'deep_dive' mode
+            config.apply_mode_config("deep_dive")
             assert config.max_iterations == 5
             assert config.total_words == 3000
 

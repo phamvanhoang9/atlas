@@ -2,24 +2,24 @@
 
 from datetime import datetime
 
-from src.modes import DEEP, QUICK, get_mode_spec, normalize_mode
+from src.modes import ASK, DEEP_DIVE, get_mode_spec, normalize_mode
 from src.prompts.registry import render_prompt
 
 
 _SEARCH_POLICIES = {
-    "quick": (
+    "ask": (
         "Broad, trustworthy web coverage: official docs, AI lab blogs, GitHub\n"
         "repos, credible engineering blogs, and technical discussions. Do NOT\n"
         "restrict to academic papers. Avoid SEO spam and content farms."
     ),
-    "research": (
+    "compare": (
         "High-quality primary sources: papers, preprints, benchmarks, model\n"
         "cards, and official announcements. Include at least one strong\n"
         "academic operator per query when sensible: site:arxiv.org, paper,\n"
         "benchmark, NeurIPS, ICML, ICLR, ACL. Prefer 'github', 'benchmark',\n"
         "'dataset', 'evaluation' terms when relevant."
     ),
-    "deep": (
+    "deep_dive": (
         "Mixed multi-angle coverage: combine academic queries (site:arxiv.org,\n"
         "paper, benchmark) with official announcements, GitHub repositories,\n"
         "and credible engineering analyses. Cover technical mechanisms,\n"
@@ -28,9 +28,9 @@ _SEARCH_POLICIES = {
 }
 
 _GOOD_EXAMPLES = {
-    "quick": '["LLM KV cache quantization production support", "vLLM KV cache quantization docs"]',
-    "research": '["RAG chunking strategies site:arxiv.org 2026", "retrieval augmented generation chunk size benchmark dataset"]',
-    "deep": '["speculative decoding paper benchmark 2026", "speculative decoding vLLM TensorRT-LLM adoption", "speculative decoding limitations production"]',
+    "ask": '["LLM KV cache quantization production support", "vLLM KV cache quantization docs"]',
+    "compare": '["RAG chunking strategies site:arxiv.org 2026", "retrieval augmented generation chunk size benchmark dataset"]',
+    "deep_dive": '["speculative decoding paper benchmark 2026", "speculative decoding vLLM TensorRT-LLM adoption", "speculative decoding limitations production"]',
 }
 
 
@@ -53,7 +53,7 @@ def generate_scope_gate_prompt(query: str) -> str:
 def generate_search_queries_prompt(question: str, max_iterations: int = 1, mode: str | None = None) -> str:
     """Load the search query generation prompt with the mode's search policy."""
     current_year = datetime.now().year
-    canonical = normalize_mode(mode) if mode else QUICK
+    canonical = normalize_mode(mode) if mode else ASK
 
     format_example = '["query 1", "query 2"]' if max_iterations > 1 else '["query 1"]'
 
@@ -122,19 +122,19 @@ def get_report_by_type(report_type: str, has_source_urls: bool = False) -> calla
 def system_role_for_mode(report_type: str, has_source_urls: bool = False) -> str:
     """Default system role per mode, used when agent selection yields none."""
     canonical = normalize_mode(report_type)
-    if canonical == DEEP and has_source_urls:
+    if canonical == DEEP_DIVE and has_source_urls:
         return (
             "You are an AI researcher explaining the provided source documents in depth. "
             "Use ONLY information from the provided sources, never training knowledge. "
             "Guide the reader to understand and apply the work."
         )
-    if canonical == DEEP:
+    if canonical == DEEP_DIVE:
         return (
             "You are a senior AI intelligence analyst. Stay strictly on the asked topic. "
             "Synthesize insights across sources, analyze contradictions, and assess "
             "engineering and product impact with explicit confidence levels."
         )
-    if canonical == QUICK:
+    if canonical == ASK:
         return (
             "You are a precise AI research assistant. Answer directly, ground every "
             "claim in the provided sources, and flag uncertainty honestly."

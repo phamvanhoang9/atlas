@@ -7,7 +7,7 @@ import logging
 from typing import Any
 
 from src.context.compression import ContextCompressor
-from src.modes import DEEP, get_mode_spec, normalize_mode
+from src.modes import DEEP_DIVE, get_mode_spec, normalize_mode
 from src.orchestration.state import ResearchState
 from src.quality.source_scorer import score_and_rank_sources
 from src.rag.context_builder import build_mode_context
@@ -178,7 +178,7 @@ async def parallel_search_and_scrape_node(state: ResearchState) -> dict[str, Any
     filtered = await _filter_academic(scraped, ws)
     await stream_output("logs", f"Building context for {len(sub_queries)} queries...\n", ws)
 
-    if normalize_mode(state["report_type"]) == DEEP:
+    if normalize_mode(state["report_type"]) == DEEP_DIVE:
         context_content = build_mode_context(filtered, state["query"], state["report_type"])
         logger.info("Deep-research context built without embedding compression docs=%s chars=%s", len(filtered), len(context_content))
         if context_content:
@@ -281,7 +281,7 @@ async def search_and_scrape_node(state: ResearchState) -> dict[str, Any]:
     if filtered:
         try:
             has_urls = bool(state.get("source_urls"))
-            is_deep = normalize_mode(state["report_type"]) == DEEP
+            is_deep = normalize_mode(state["report_type"]) == DEEP_DIVE
             if has_urls and is_deep:
                 await stream_output("logs", "Preparing full source content...\n", ws)
                 context_content = build_mode_context(filtered, state["query"], state["report_type"])

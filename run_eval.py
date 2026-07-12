@@ -5,9 +5,9 @@ evaluation step against real APIs. For the offline, deterministic benchmark use
 ``run_benchmark.py`` instead.
 
 Usage:
-    python run_eval.py                                  # default query, quick mode
-    python run_eval.py deep                             # default query, deep mode
-    python run_eval.py research "your query here"       # custom mode and query
+    python run_eval.py                                  # default query, ask mode
+    python run_eval.py deep_dive                        # default query, deep_dive mode
+    python run_eval.py compare "your query here"        # custom mode and query
     python run_eval.py --all                            # benchmark all 3 modes
 """
 import argparse
@@ -34,26 +34,27 @@ logging.basicConfig(
 # Mode-specific default queries chosen to be unambiguous so Tavily returns
 # on-topic inference/latency sources rather than training-optimization ones.
 _MODE_QUERIES: dict[str, str] = {
-    "quick": "How does Graph RAG differ from traditional RAG?",
-    "deep": (
+    "ask": "How does Graph RAG differ from traditional RAG?",
+    "deep_dive": (
         "Analyze the main techniques for optimizing LLM inference latency: "
         "KV cache, continuous batching, speculative decoding, and quantization"
     ),
-    "research": (
+    "compare": (
         "Recommend recent research papers on optimizing large language model "
         "inference speed (LLM serving, throughput, latency)"
     ),
 }
 
-# Canonical ids plus accepted English shorthands (D-004).
+# Canonical ids plus accepted English shorthands (decision D-004, superseded
+# 2026-07-12 — see modes_redesign_plan.md Mục 8.1 #4).
 _MODE_ALIASES: dict[str, str] = {
-    "quick": "quick",
-    "research": "research",
-    "deep": "deep",
+    "ask": "ask",
+    "compare": "compare",
+    "deep_dive": "deep_dive",
     # English shorthands
-    "qa": "quick",
-    "paper": "research",
-    "analysis": "deep",
+    "qa": "ask",
+    "paper": "compare",
+    "analysis": "deep_dive",
 }
 
 
@@ -61,7 +62,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run ATLAS online evaluation without a WebSocket server.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="Modes: quick | research | deep  (aliases: qa, paper, analysis)",
+        epilog="Modes: ask | compare | deep_dive  (aliases: qa, paper, analysis)",
     )
     parser.add_argument(
         "--all",
@@ -71,8 +72,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "mode",
         nargs="?",
-        default="quick",
-        help="Research mode: quick | research | deep  (default: quick)",
+        default="ask",
+        help="Research mode: ask | compare | deep_dive  (default: ask)",
     )
     parser.add_argument(
         "query",
@@ -85,7 +86,7 @@ def parse_args() -> argparse.Namespace:
     if not args.all:
         resolved = _MODE_ALIASES.get(args.mode)
         if resolved is None:
-            parser.error(f"Unknown mode {args.mode!r}. Choose from: quick, research, deep")
+            parser.error(f"Unknown mode {args.mode!r}. Choose from: ask, compare, deep_dive")
         args.mode = resolved
         if args.query is None:
             args.query = _MODE_QUERIES[args.mode]

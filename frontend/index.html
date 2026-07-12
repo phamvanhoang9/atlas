@@ -64,34 +64,34 @@
                         <button id="modeBtn" class="mode-trigger" type="button"
                                 aria-haspopup="listbox" aria-expanded="false" data-i18n-title="mode.select.tip">
                             <span class="mode-trigger-icon" id="modeBtnIcon" aria-hidden="true">⚡</span>
-                            <span class="mode-trigger-label" id="modeBtnLabel" data-i18n="mode.quick">Quick</span>
+                            <span class="mode-trigger-label" id="modeBtnLabel" data-i18n="mode.ask">Quick</span>
                             <span class="mode-trigger-caret" aria-hidden="true">▾</span>
                         </button>
                         <div id="modePopover" class="mode-popover is-hidden" role="listbox" aria-label="Research mode">
-                            <button class="mode-option" type="button" role="option" data-mode="quick" aria-selected="true">
+                            <button class="mode-option" type="button" role="option" data-mode="ask" aria-selected="true">
                                 <span class="mode-option-icon" aria-hidden="true">⚡</span>
                                 <span class="mode-option-text">
-                                    <span class="mode-option-title" data-i18n="mode.quick">Quick</span>
-                                    <span class="mode-option-desc" data-i18n="mode.quick.tip">Fast, cited answer to a direct question.</span>
+                                    <span class="mode-option-title" data-i18n="mode.ask">Quick</span>
+                                    <span class="mode-option-desc" data-i18n="mode.ask.tip">Fast, cited answer to a direct question.</span>
                                 </span>
                             </button>
-                            <button class="mode-option" type="button" role="option" data-mode="research" aria-selected="false">
+                            <button class="mode-option" type="button" role="option" data-mode="compare" aria-selected="false">
                                 <span class="mode-option-icon" aria-hidden="true">📑</span>
                                 <span class="mode-option-text">
-                                    <span class="mode-option-title" data-i18n="mode.research">Research</span>
-                                    <span class="mode-option-desc" data-i18n="mode.research.tip">Structured report from papers & official sources.</span>
+                                    <span class="mode-option-title" data-i18n="mode.compare">Research</span>
+                                    <span class="mode-option-desc" data-i18n="mode.compare.tip">Structured report from papers & official sources.</span>
                                 </span>
                             </button>
-                            <button class="mode-option" type="button" role="option" data-mode="deep" aria-selected="false">
+                            <button class="mode-option" type="button" role="option" data-mode="deep_dive" aria-selected="false">
                                 <span class="mode-option-icon" aria-hidden="true">🔬</span>
                                 <span class="mode-option-text">
-                                    <span class="mode-option-title" data-i18n="mode.deep">Deep Research</span>
-                                    <span class="mode-option-desc" data-i18n="mode.deep.tip">Multi-step analysis with impact & confidence.</span>
+                                    <span class="mode-option-title" data-i18n="mode.deep_dive">Deep Research</span>
+                                    <span class="mode-option-desc" data-i18n="mode.deep_dive.tip">Multi-step analysis with impact & confidence.</span>
                                 </span>
                             </button>
                         </div>
                     </div>
-                    <input type="hidden" name="report_type" id="reportType" value="quick">
+                    <input type="hidden" name="report_type" id="reportType" value="ask">
                     <button id="sendBtn" class="send-btn" type="submit" data-i18n-title="composer.send.tip" aria-label="Send">↑</button>
                 </form>
                 <div class="tagline" data-i18n="tagline">Cites everything. Guesses nothing.</div>
@@ -157,9 +157,9 @@
                         <div class="field">
                             <label for="autoDepth" data-i18n="auto.depth">Research depth</label>
                             <select id="autoDepth">
-                                <option value="quick" data-i18n="auto.depth.quick">Quick — headlines only</option>
-                                <option value="research" data-i18n="auto.depth.research">Research — structured digest</option>
-                                <option value="deep" selected data-i18n="auto.depth.deep">Deep — full intelligence report</option>
+                                <option value="ask" data-i18n="auto.depth.ask">Quick — headlines only</option>
+                                <option value="compare" data-i18n="auto.depth.compare">Research — structured digest</option>
+                                <option value="deep_dive" selected data-i18n="auto.depth.deep_dive">Deep — full intelligence report</option>
                             </select>
                         </div>
 
