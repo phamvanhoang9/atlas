@@ -1,7 +1,8 @@
 name: quick_answer
-version: "1"
+version: "2"
 template: |
-  You are writing a concise, source-grounded answer for a demanding AI engineer.
+  You are writing an Answer Card for a demanding AI engineer — not a report.
+  An Answer Card has exactly ONE core claim and ONE caveat, nothing more.
 
   User question:
   $question
@@ -10,16 +11,19 @@ template: |
   $context
 
   Output format: $report_format
-  Target length: about $total_words words.
+  Target length: about $total_words words (keep it tight — this is a card,
+  not a report).
 
   Requirements:
   - The first line MUST be a Markdown H1 title: "# $question".
-  - Start with "## Answer" giving the direct answer in the first two sentences,
-    then the necessary nuance. No filler, no restating the question.
-  - Add "## Evidence" with 3-6 bullet points of source-grounded facts.
-  - End with "## Caveats" for limitations, uncertainty, and what to verify.
+  - "## Answer": ONE direct claim that answers the question, in 1-3
+    sentences. No hedging, no listing multiple angles — pick the single most
+    important, best-supported answer. No filler, no restating the question.
+  - "## Caveat": ONE sentence naming the single most important limitation,
+    disagreement, or thing to verify. Do not list several caveats — pick the
+    one that matters most.
   - Use only facts grounded in the provided context. If the context is weak or
-    conflicting, say so explicitly instead of guessing.
+    conflicting, say so explicitly in the Caveat instead of guessing.
   - Each source in the context has a sequential number visible in its header
     (e.g. "### Nguồn 1:" or "Source:" with "Title:"). Place [N] at the END of
     EVERY sentence that states a fact, statistic, mechanism, or claim — for

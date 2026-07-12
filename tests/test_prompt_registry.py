@@ -38,6 +38,27 @@ def test_report_prompt_uses_yaml_template() -> None:
     assert "## Sources" in prompt
 
 
+def test_ask_prompt_is_an_answer_card_with_one_claim_and_one_caveat() -> None:
+    """Ask output is an Answer Card (modes_redesign_plan.md Mục 4 Mode 1):
+    ONE core claim + ONE caveat, not a multi-bullet report. The trust badge
+    itself is computed deterministically by the frontend from source_scorer
+    categories, never by the LLM — the prompt must not ask the model to
+    invent a trust score."""
+    prompt = get_report_by_type("ask")(
+        "What is reranking?",
+        ["Source: https://example.com\nContent: reranking improves relevance"],
+        "markdown",
+        200,
+    )
+
+    assert "## Answer" in prompt
+    assert "## Caveat" in prompt
+    assert "## Evidence" not in prompt
+    assert "## Caveats" not in prompt
+    assert "ONE" in prompt
+    assert "trust" not in prompt.lower()
+
+
 def test_report_prompt_falls_back_for_unknown_mode_string() -> None:
     unknown = get_report_by_type("hỏi đáp")("q", ["ctx"], "markdown", 500)
     research = get_report_by_type("compare")("q", ["ctx"], "markdown", 500)

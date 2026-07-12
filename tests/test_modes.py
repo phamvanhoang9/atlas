@@ -108,14 +108,51 @@ def test_mode_profiles_scale_with_depth() -> None:
     assert profiles["ask"] < profiles["compare"] < profiles["deep_dive"]
 
 
-def test_route_model_upgrades_deep_dive_mode() -> None:
+def test_route_model_deep_dive_upgrades_cheap_models() -> None:
     assert route_model("deep_dive", "gpt-4o-mini", "openai") == "gpt-4o"
     assert route_model("deep_dive", "gemini-1.5-flash", "google") == "gemini-1.5-pro"
 
-    # Simpler modes keep the requested (cheap) model.
-    assert route_model("ask", "gpt-4o-mini", "openai") == "gpt-4o-mini"
-    assert route_model("compare", "gpt-4o-mini", "openai") == "gpt-4o-mini"
+
+def test_route_model_deep_dive_leaves_already_strong_models_unchanged() -> None:
+    assert route_model("deep_dive", "gpt-4o", "openai") == "gpt-4o"
+    assert route_model("deep_dive", "gemini-1.5-pro", "google") == "gemini-1.5-pro"
+
+
+def test_route_model_ask_downgrades_strong_models() -> None:
+    """Ask must be genuinely cheap/fast (plan finding #1: 'quick không nhanh
+    ở tầng model') — force the cheap tier even if the configured default is
+    the stronger model."""
+    assert route_model("ask", "gpt-4o", "openai") == "gpt-4o-mini"
     assert route_model("ask", "gemini-1.5-pro", "google") == "gemini-1.5-flash"
 
-    # Explicit override always wins.
+
+def test_route_model_ask_leaves_already_cheap_models_unchanged() -> None:
+    assert route_model("ask", "gpt-4o-mini", "openai") == "gpt-4o-mini"
+    assert route_model("ask", "gemini-1.5-flash", "google") == "gemini-1.5-flash"
+
+
+def test_route_model_compare_never_overrides_requested_model() -> None:
+    """Compare is the middle tier: pass through whatever is configured,
+    neither forcing the cheap nor the strong variant."""
+    assert route_model("compare", "gpt-4o-mini", "openai") == "gpt-4o-mini"
+    assert route_model("compare", "gpt-4o", "openai") == "gpt-4o"
+    assert route_model("compare", "gemini-1.5-flash", "google") == "gemini-1.5-flash"
+    assert route_model("compare", "gemini-1.5-pro", "google") == "gemini-1.5-pro"
+
+
+def test_route_model_never_remaps_unrecognized_custom_models() -> None:
+    """A user's custom/fine-tuned model id must never be silently swapped
+    out for a hardcoded tier model — only recognized flash/pro/mini/4o
+    strings are ever remapped."""
+    assert route_model("ask", "ft:gpt-4o-mini:acme:custom", "openai") == "ft:gpt-4o-mini:acme:custom"
+    assert route_model("deep_dive", "my-custom-model", "google") == "my-custom-model"
+
+
+def test_route_model_unknown_mode_falls_back_to_compare_pass_through() -> None:
+    assert route_model("not_a_real_mode", "gpt-4o-mini", "openai") == "gpt-4o-mini"
+    assert route_model("not_a_real_mode", "gpt-4o", "openai") == "gpt-4o"
+
+
+def test_route_model_explicit_override_always_wins() -> None:
     assert route_model("deep_dive", "gpt-4o-mini", "openai", override_model="o3") == "o3"
+    assert route_model("ask", "gpt-4o", "openai", override_model="custom-model") == "custom-model"

@@ -245,6 +245,7 @@ const Atlas = (() => {
             <article class="answer-block">
                 <div class="answer-head">
                     <span class="mode-badge"></span>
+                    <span class="trust-badge is-hidden"></span>
                     <div class="answer-actions">
                         <button type="button" class="btn btn-ghost answer-copy" disabled>${AtlasShared.escapeHtml(t("answer.copy"))}</button>
                         <a class="btn btn-ghost answer-pdf disabled" target="_blank" rel="noopener" href="#">${AtlasShared.escapeHtml(t("answer.pdf"))}</a>
@@ -275,6 +276,7 @@ const Atlas = (() => {
             root,
             bubble: root.querySelector(".bubble-user"),
             badge: root.querySelector(".mode-badge"),
+            trustBadge: root.querySelector(".trust-badge"),
             copyBtn: root.querySelector(".answer-copy"),
             pdfLink: root.querySelector(".answer-pdf"),
             stepsDis: root.querySelector(".steps-dis"),
@@ -351,7 +353,56 @@ const Atlas = (() => {
         queueRender();
     };
 
+    // Compact display names for the trust badge's category breakdown text
+    // (e.g. "2 official · 1 arxiv"). Falls back to the raw category key for
+    // any taxonomy value not listed here, so a future source_scorer category
+    // never breaks the badge (Mục 8.2: "nguồn không khớp category nào").
+    const TRUST_CATEGORY_SHORT = {
+        official: "official", peer_reviewed: "peer-reviewed", arxiv_preprint: "arxiv",
+        ai_lab_blog: "AI lab", github_repo: "GitHub", engineering_blog: "eng blog",
+        tech_forum: "forum", uncategorized: "web", news: "news", low_quality: "low-quality",
+    };
+
+    // Deterministic trust badge summary from source_scorer categories — never
+    // LLM-generated (D-008). Returns null when there is nothing to score
+    // (Mục 8.2: "0 nguồn tìm được" must hide the badge, not show "0/100").
+    const computeTrustSummary = (sources) => {
+        if (!Array.isArray(sources) || sources.length === 0) return null;
+
+        const counts = new Map();
+        let scoreSum = 0;
+        let scoreCount = 0;
+        sources.forEach((source) => {
+            const category = source.category || "uncategorized";
+            counts.set(category, (counts.get(category) || 0) + 1);
+            const score = Number(source.score);
+            if (Number.isFinite(score)) { scoreSum += score; scoreCount += 1; }
+        });
+
+        // Tie-break: highest count first, then alphabetical by category key,
+        // so equal-count categories render in a stable, deterministic order
+        // (Mục 8.2: "2 nguồn điểm bằng nhau — tie-break hiển thị thứ tự nào").
+        const breakdown = [...counts.entries()]
+            .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+            .map(([category, count]) => `${count} ${TRUST_CATEGORY_SHORT[category] || category}`)
+            .join(" · ");
+
+        const avgScore = scoreCount ? Math.round(scoreSum / scoreCount) : null;
+        const tier = avgScore === null ? "low" : avgScore >= 80 ? "high" : avgScore >= 50 ? "mid" : "low";
+        return { avgScore, tier, breakdown, count: sources.length };
+    };
+
+    const renderTrustBadge = (turn, sources) => {
+        const summary = computeTrustSummary(sources);
+        if (!summary) { turn.trustBadge.classList.add("is-hidden"); return; }
+        turn.trustBadge.className = `trust-badge trust-${summary.tier}`;
+        turn.trustBadge.textContent = summary.avgScore === null ? summary.breakdown : `${summary.avgScore} · ${summary.breakdown}`;
+        turn.trustBadge.dataset.count = String(summary.count);
+        turn.trustBadge.title = t("trust.badge.tip", { n: summary.count });
+    };
+
     const renderSources = (turn, sources) => {
+        renderTrustBadge(turn, sources);
         turn.sourcesBody.innerHTML = "";
         if (!Array.isArray(sources) || sources.length === 0) {
             turn.sourcesBody.innerHTML = `<p class="empty-note">${AtlasShared.escapeHtml(t("sources.empty"))}</p>`;
@@ -432,6 +483,9 @@ const Atlas = (() => {
         document.querySelectorAll("#thread .quality-chip.evalc").forEach((chip) => {
             chip.textContent = t("quality.eval", { score: chip.dataset.es, label: chip.dataset.el });
             chip.title = t("quality.eval.tip");
+        });
+        document.querySelectorAll("#thread .trust-badge").forEach((badge) => {
+            if (badge.dataset.count) badge.title = t("trust.badge.tip", { n: badge.dataset.count });
         });
     };
 
