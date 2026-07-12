@@ -42,9 +42,38 @@ def auto_agent_instructions() -> str:
     return prompt
 
 
-def generate_scope_gate_prompt(query: str) -> str:
-    """Load the AI-domain scope gate prompt."""
-    prompt = render_prompt("scope_gate", {"query": query})
+_SCOPE_INSTRUCTIONS = {
+    "ai_native": (
+        "Default to IN SCOPE. Accept any knowledge, technical, or research "
+        "task that an AI builder or AI shipper might plausibly bring — even "
+        "if it never says the word \"AI\" — including questions in another "
+        "domain (e.g. healthcare, finance, law) that they may be evaluating "
+        "for an AI application, and adjacent engineering/research/technical "
+        "questions. Only mark OUT OF SCOPE when the query has no research, "
+        "technical, or professional knowledge angle at all: spam, personal "
+        "lifestyle chit-chat, entertainment, sports scores, recipes, travel "
+        "planning, or general news with nothing to research or build."
+    ),
+    "ai_strict": (
+        "Only mark IN SCOPE when artificial intelligence is the central "
+        "subject: machine learning, LLMs, AI models, AI tooling, AI "
+        "infrastructure, AI agents, AI coding tools, AI research papers, AI "
+        "products, AI policy/safety, or the engineering/business "
+        "implications of AI systems. Queries about software engineering, "
+        "data, math, or hardware count as in scope ONLY when AI is central "
+        "to the question. General knowledge, lifestyle, travel, food, "
+        "sports, medicine, finance, or news questions without an AI angle "
+        "are out of scope."
+    ),
+}
+
+
+def generate_scope_gate_prompt(query: str, scope_mode: str = "ai_native") -> str:
+    """Load the scope gate prompt for *scope_mode* ("ai_native" soft-default,
+    or "ai_strict" hard AI-only block; unrecognized values fall back to
+    "ai_native" the same way normalize_mode() falls back for research modes)."""
+    instructions = _SCOPE_INSTRUCTIONS.get(scope_mode, _SCOPE_INSTRUCTIONS["ai_native"])
+    prompt = render_prompt("scope_gate", {"query": query, "scope_instructions": instructions})
     if prompt is None:
         raise ValueError("Missing scope_gate.yaml template")
     return prompt

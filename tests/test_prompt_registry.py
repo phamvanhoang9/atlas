@@ -2,6 +2,7 @@
 
 from src.prompts.functions import (
     auto_agent_instructions,
+    generate_scope_gate_prompt,
     generate_search_queries_prompt,
     get_report_by_type,
 )
@@ -55,3 +56,24 @@ def test_agent_prompt_uses_yaml_template() -> None:
 
     assert "Return only valid JSON" in prompt
     assert "agent_role_prompt" in prompt
+
+
+def test_scope_gate_prompt_defaults_to_ai_native_soft_wording() -> None:
+    default_prompt = generate_scope_gate_prompt("some query")
+    explicit_native = generate_scope_gate_prompt("some query", scope_mode="ai_native")
+
+    assert default_prompt == explicit_native
+    assert "Default to IN SCOPE" in default_prompt
+
+
+def test_scope_gate_prompt_ai_strict_requires_ai_central() -> None:
+    prompt = generate_scope_gate_prompt("some query", scope_mode="ai_strict")
+
+    assert "central" in prompt
+    assert "Default to IN SCOPE" not in prompt
+
+
+def test_scope_gate_prompt_unknown_mode_falls_back_to_ai_native() -> None:
+    prompt = generate_scope_gate_prompt("some query", scope_mode="not_a_real_mode")
+
+    assert "Default to IN SCOPE" in prompt

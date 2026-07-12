@@ -64,28 +64,28 @@
                         <button id="modeBtn" class="mode-trigger" type="button"
                                 aria-haspopup="listbox" aria-expanded="false" data-i18n-title="mode.select.tip">
                             <span class="mode-trigger-icon" id="modeBtnIcon" aria-hidden="true">⚡</span>
-                            <span class="mode-trigger-label" id="modeBtnLabel" data-i18n="mode.ask">Quick</span>
+                            <span class="mode-trigger-label" id="modeBtnLabel" data-i18n="mode.ask">Ask</span>
                             <span class="mode-trigger-caret" aria-hidden="true">▾</span>
                         </button>
                         <div id="modePopover" class="mode-popover is-hidden" role="listbox" aria-label="Research mode">
                             <button class="mode-option" type="button" role="option" data-mode="ask" aria-selected="true">
                                 <span class="mode-option-icon" aria-hidden="true">⚡</span>
                                 <span class="mode-option-text">
-                                    <span class="mode-option-title" data-i18n="mode.ask">Quick</span>
+                                    <span class="mode-option-title" data-i18n="mode.ask">Ask</span>
                                     <span class="mode-option-desc" data-i18n="mode.ask.tip">Fast, cited answer to a direct question.</span>
                                 </span>
                             </button>
                             <button class="mode-option" type="button" role="option" data-mode="compare" aria-selected="false">
-                                <span class="mode-option-icon" aria-hidden="true">📑</span>
+                                <span class="mode-option-icon" aria-hidden="true">⚖</span>
                                 <span class="mode-option-text">
-                                    <span class="mode-option-title" data-i18n="mode.compare">Research</span>
-                                    <span class="mode-option-desc" data-i18n="mode.compare.tip">Structured report from papers & official sources.</span>
+                                    <span class="mode-option-title" data-i18n="mode.compare">Compare</span>
+                                    <span class="mode-option-desc" data-i18n="mode.compare.tip">Structured comparison grounded in papers & official sources.</span>
                                 </span>
                             </button>
                             <button class="mode-option" type="button" role="option" data-mode="deep_dive" aria-selected="false">
                                 <span class="mode-option-icon" aria-hidden="true">🔬</span>
                                 <span class="mode-option-text">
-                                    <span class="mode-option-title" data-i18n="mode.deep_dive">Deep Research</span>
+                                    <span class="mode-option-title" data-i18n="mode.deep_dive">Deep Dive</span>
                                     <span class="mode-option-desc" data-i18n="mode.deep_dive.tip">Multi-step analysis with impact & confidence.</span>
                                 </span>
                             </button>
@@ -157,9 +157,9 @@
                         <div class="field">
                             <label for="autoDepth" data-i18n="auto.depth">Research depth</label>
                             <select id="autoDepth">
-                                <option value="ask" data-i18n="auto.depth.ask">Quick — headlines only</option>
-                                <option value="compare" data-i18n="auto.depth.compare">Research — structured digest</option>
-                                <option value="deep_dive" selected data-i18n="auto.depth.deep_dive">Deep — full intelligence report</option>
+                                <option value="ask" data-i18n="auto.depth.ask">Ask — short, cited answer</option>
+                                <option value="compare" data-i18n="auto.depth.compare">Compare — structured report</option>
+                                <option value="deep_dive" selected data-i18n="auto.depth.deep_dive">Deep Dive — full analysis & report</option>
                             </select>
                         </div>
 

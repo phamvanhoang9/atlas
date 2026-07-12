@@ -44,6 +44,25 @@ def test_explicit_missing_config_file_raises():
     with pytest.raises(FileNotFoundError):
         Config(config_file="non_existent.json")
 
+def test_scope_mode_defaults_to_ai_native():
+    with patch("os.path.exists", return_value=False):
+        config = Config()
+    assert config.scope_mode == "ai_native"
+
+@patch.dict(os.environ, {"SCOPE_MODE": "ai_strict"})
+def test_scope_mode_env_var_override():
+    with patch("os.path.exists", return_value=True), patch("builtins.open", MagicMock()):
+        with patch("json.load", return_value={}):
+            config = Config(config_file="non_existent.json")
+    assert config.scope_mode == "ai_strict"
+
+@patch.dict(os.environ, {"SCOPE_MODE": "totally_made_up"})
+def test_scope_mode_rejects_invalid_value():
+    with patch("os.path.exists", return_value=True), patch("builtins.open", MagicMock()):
+        with patch("json.load", return_value={}):
+            with pytest.raises(ConfigError):
+                Config(config_file="non_existent.json")
+
 @patch.dict(os.environ, {"RETRIEVER": "tavily", "TOKEN_LIMIT": "9999"})
 def test_config_env_vars():
     # Mock open to avoid FileNotFoundError

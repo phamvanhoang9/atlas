@@ -59,6 +59,7 @@ class ConfigSchema(BaseModel):
     eval_top_k: int = Field(default=3, gt=0)
     eval_fail_thresholds: dict = Field(default_factory=dict)
     llm_kwargs: dict = Field(default_factory=dict)
+    scope_mode: str = "ai_native"
 
     @field_validator("retriever")
     @classmethod
@@ -86,6 +87,13 @@ class ConfigSchema(BaseModel):
     def validate_eval_llm_provider(cls, value: str) -> str:
         if value not in {"openai", "google"}:
             raise ValueError("eval_llm_provider must be one of: openai, google")
+        return value
+
+    @field_validator("scope_mode")
+    @classmethod
+    def validate_scope_mode(cls, value: str) -> str:
+        if value not in {"ai_native", "ai_strict"}:
+            raise ValueError("scope_mode must be one of: ai_native, ai_strict")
         return value
 
 
@@ -164,7 +172,10 @@ class Config:
         self.eval_embedding_model = os.getenv('EVAL_EMBEDDING_MODEL', '')
         self.eval_top_k = int(os.getenv('EVAL_TOP_K', 3))
         self.eval_fail_thresholds = self._load_eval_thresholds(os.getenv('EVAL_FAIL_THRESHOLDS'))
-        
+
+        # AI-native (default, soft) vs AI-strict (hard block) scope gate mode.
+        self.scope_mode = os.getenv('SCOPE_MODE', 'ai_native')
+
         # Load config file FIRST (so mode configs can override it)
         self.load_config_file()
         if not hasattr(self, "llm_kwargs"):

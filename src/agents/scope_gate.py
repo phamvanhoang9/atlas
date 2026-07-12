@@ -96,7 +96,12 @@ async def scope_gate_node(state: ResearchState) -> dict[str, Any]:
             model=state["cfg"].llm_model,
             messages=[
                 {"role": "system", "content": "You are a strict JSON-only classifier."},
-                {"role": "user", "content": generate_scope_gate_prompt(query)},
+                {
+                    "role": "user",
+                    "content": generate_scope_gate_prompt(
+                        query, scope_mode=getattr(state["cfg"], "scope_mode", "ai_native")
+                    ),
+                },
             ],
             temperature=0.0,
             llm_provider=state["cfg"].llm_provider,

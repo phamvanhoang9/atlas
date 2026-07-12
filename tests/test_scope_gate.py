@@ -29,6 +29,7 @@ def _state(query: str, **overrides) -> dict:
         llm_provider="openai",
         llm_kwargs={},
         temperature=0.0,
+        scope_mode="ai_native",
     )
     state = {
         "query": query,
@@ -150,3 +151,25 @@ def test_refusal_report_without_reframe_suggests_ai_angle() -> None:
 
 def test_route_after_scope_gate_defaults_to_in_scope() -> None:
     assert route_after_scope_gate({"query": "x"}) == "in_scope"
+
+
+@pytest.mark.asyncio
+async def test_scope_gate_passes_configured_scope_mode_to_prompt(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict = {}
+
+    def _fake_prompt(query: str, scope_mode: str = "ai_native") -> str:
+        captured["scope_mode"] = scope_mode
+        return "PROMPT"
+
+    async def _fake_completion(**kwargs):
+        return '{"in_scope": true, "reason": "ok", "suggested_reframe": ""}'
+
+    monkeypatch.setattr("src.agents.scope_gate.generate_scope_gate_prompt", _fake_prompt)
+    monkeypatch.setattr("src.agents.scope_gate.create_chat_completion", _fake_completion)
+
+    state = _state("best pizza in Hanoi")
+    state["cfg"].scope_mode = "ai_strict"
+
+    await scope_gate_node(state)
+
+    assert captured["scope_mode"] == "ai_strict"

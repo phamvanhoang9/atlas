@@ -217,7 +217,7 @@ const Atlas = (() => {
         "stage.writing": { icon: "📝", order: 7 },
     };
     const STAGE_TOTAL = 7;
-    const MODE_ICONS = { ask: "⚡", compare: "📑", deep_dive: "🔬" };
+    const MODE_ICONS = { ask: "⚡", compare: "⚖", deep_dive: "🔬" };
 
     const fmtElapsed = (ms) => {
         const s = Math.max(0, Math.floor(ms / 1000));
