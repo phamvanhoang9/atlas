@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 
 from src.api import deps
 from src.api.middleware.auth import configured_auth_token
+from src.api.routes.actions import router as actions_router
 from src.api.routes.automation import router as automation_router
 from src.api.routes.evaluation import router as evaluation_router
 from src.api.routes.history import router as history_router
@@ -137,6 +138,7 @@ def create_app() -> FastAPI:
     app.include_router(history_router)
     app.include_router(evaluation_router)
     app.include_router(automation_router)
+    app.include_router(actions_router)
     return app
 
 

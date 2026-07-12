@@ -1,0 +1,25 @@
+name: explain
+version: "1"
+template: |
+  A reader is looking at the following passage and wants it explained more
+  simply. You are not writing a report — just a short, plain-language
+  explanation of THIS passage.
+
+  Passage:
+  $passage
+
+  Surrounding context (may be empty):
+  $context
+
+  Rules:
+  - Explain the passage in plain language, as if to a colleague from a
+    different specialty. 2-5 sentences, no headings, no bullet lists.
+  - If the passage is already simple and clear, say so in one short sentence
+    instead of inventing artificial complexity or padding the answer.
+  - If the passage is too short or lacks enough context to explain
+    meaningfully on its own, say so plainly instead of guessing at what it
+    might mean.
+  - Do not restate the passage verbatim. Do not add information that is not
+    implied by the passage itself.
+  - Answer in the same language as the passage; keep standard English
+    technical terms as-is.
