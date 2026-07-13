@@ -78,14 +78,18 @@ const AtlasShared = (() => {
         // Tie-break: highest count first, then alphabetical by category key,
         // so equal-count categories render in a stable, deterministic order
         // (Mục 8.2: "2 nguồn điểm bằng nhau — tie-break hiển thị thứ tự nào").
-        const breakdown = [...counts.entries()]
-            .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        const sortedCategories = [...counts.entries()]
+            .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+        const breakdown = sortedCategories
             .map(([category, count]) => `${count} ${TRUST_CATEGORY_SHORT[category] || category}`)
             .join(" · ");
+        const categories = sortedCategories.map(([category, count]) => ({
+            category, label: TRUST_CATEGORY_SHORT[category] || category, count,
+        }));
 
         const avgScore = scoreCount ? Math.round(scoreSum / scoreCount) : null;
         const tier = avgScore === null ? "low" : avgScore >= 80 ? "high" : avgScore >= 50 ? "mid" : "low";
-        return { avgScore, tier, breakdown, count: sources.length };
+        return { avgScore, tier, breakdown, count: sources.length, categories };
     };
 
     return {
@@ -310,6 +314,85 @@ const AtlasPanel = (() => {
     return { openExplain, openVet, close };
 })();
 window.AtlasPanel = AtlasPanel;
+
+/* -------------------------------------------------- trust badge popover */
+// Click-to-open replacement for the old `title` tooltip (Phần 1 #3). A
+// single shared popover element positioned near whichever badge was
+// clicked; content is read back off badge.dataset.trust (set by
+// renderTrustBadge / history.js) so this works for badges created anywhere
+// - live turn, reopened stored report, or a History list card - without a
+// shared in-memory lookup keyed by DOM node.
+
+const AtlasTrustPopover = (() => {
+    const t = (k, v) => AtlasI18n.t(k, v);
+    const el = (id) => document.getElementById(id);
+
+    const TIER_COLOR_VAR = { high: "var(--green)", mid: "var(--amber)", low: "var(--red)" };
+
+    const close = () => { el("trustPopover").classList.add("is-hidden"); };
+
+    const buildRows = (categories, total) => (categories || []).map(({ label, count }) => {
+        const pct = total ? Math.round((count / total) * 100) : 0;
+        return `
+            <div class="taxo-row">
+                <span class="taxo-label">${AtlasShared.escapeHtml(label)}</span>
+                <div class="taxo-bar-bg"><div class="taxo-bar-fill" style="width:${pct}%"></div></div>
+                <span class="taxo-val">${count}</span>
+            </div>
+        `;
+    }).join("");
+
+    const open = (badge) => {
+        let summary = null;
+        try { summary = JSON.parse(badge.dataset.trust || "null"); } catch { /* malformed - just skip */ }
+        if (!summary) return;
+
+        const pop = el("trustPopover");
+        const color = TIER_COLOR_VAR[summary.tier] || TIER_COLOR_VAR.low;
+        const scoreLine = summary.avgScore === null ? summary.breakdown : `${summary.avgScore}/100`;
+        pop.innerHTML = `
+            <div class="tp-score" style="color:${color}">${AtlasShared.escapeHtml(String(scoreLine))}</div>
+            <div class="tp-cat">${AtlasShared.escapeHtml(t("trust.popover.sources", { n: summary.count }))} · ${AtlasShared.escapeHtml(t(`trust.tier.${summary.tier}`))}</div>
+            ${buildRows(summary.categories, summary.count)}
+            <p class="tp-note">${AtlasShared.escapeHtml(t("trust.badge.tip", { n: summary.count }))}</p>
+        `;
+        pop.classList.remove("is-hidden");
+
+        // Position after unhiding so getBoundingClientRect reflects real size;
+        // flip above the badge if it would overflow the bottom of the viewport.
+        const rect = badge.getBoundingClientRect();
+        const popRect = pop.getBoundingClientRect();
+        let left = rect.left;
+        let top = rect.bottom + 8;
+        if (left + popRect.width > window.innerWidth - 12) left = window.innerWidth - popRect.width - 12;
+        if (top + popRect.height > window.innerHeight - 12) top = rect.top - popRect.height - 8;
+        pop.style.left = `${Math.max(8, left)}px`;
+        pop.style.top = `${Math.max(8, top)}px`;
+    };
+
+    const init = () => {
+        // Capture phase: a trust badge can sit inside a clickable ancestor
+        // (a History card that opens the stored report on click), so this
+        // must intercept and stopPropagation() before that ancestor's own
+        // bubble-phase listener ever runs, not after.
+        document.addEventListener("click", (event) => {
+            const badge = event.target.closest(".trust-badge");
+            if (badge && !badge.classList.contains("is-hidden")) {
+                event.stopPropagation();
+                open(badge);
+                return;
+            }
+            if (!event.target.closest("#trustPopover")) close();
+        }, true);
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") close();
+        });
+    };
+
+    document.addEventListener("DOMContentLoaded", init);
+    return { close };
+})();
+window.AtlasTrustPopover = AtlasTrustPopover;
 
 /* -------------------------------------------------- research view */
 
@@ -583,8 +666,10 @@ const Atlas = (() => {
         if (!summary) { turn.trustBadge.classList.add("is-hidden"); return; }
         turn.trustBadge.className = `trust-badge trust-${summary.tier}`;
         turn.trustBadge.textContent = summary.avgScore === null ? summary.breakdown : `${summary.avgScore} · ${summary.breakdown}`;
-        turn.trustBadge.dataset.count = String(summary.count);
-        turn.trustBadge.title = t("trust.badge.tip", { n: summary.count });
+        // Popover reads the summary back off the element itself (Task 4) -
+        // works for badges created anywhere (live turn, History cards)
+        // without needing a shared in-memory lookup keyed by DOM node.
+        turn.trustBadge.dataset.trust = JSON.stringify(summary);
     };
 
     const renderSources = (turn, sources) => {
@@ -685,9 +770,9 @@ const Atlas = (() => {
             chip.textContent = t("quality.eval", { score: chip.dataset.es, label: chip.dataset.el });
             chip.title = t("quality.eval.tip");
         });
-        document.querySelectorAll("#thread .trust-badge").forEach((badge) => {
-            if (badge.dataset.count) badge.title = t("trust.badge.tip", { n: badge.dataset.count });
-        });
+        // Trust badges no longer carry a title tooltip - the popover (built
+        // fresh from dataset.trust on each click) replaces it, so there is
+        // nothing here to re-localize.
     };
 
     // Build the quality chips (grounding + optional evaluation) from a turn's

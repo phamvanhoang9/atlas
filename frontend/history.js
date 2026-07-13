@@ -100,7 +100,7 @@ const AtlasHistory = (() => {
             // same "hide, don't error" rule as the live 0-source case.
             const trustSummary = computeTrustSummary(latest.sources);
             const trustChip = trustSummary
-                ? `<span class="trust-badge trust-${trustSummary.tier}" title="${escapeHtml(t("trust.badge.tip", { n: trustSummary.count }))}">${escapeHtml(trustSummary.avgScore === null ? trustSummary.breakdown : `${trustSummary.avgScore} · ${trustSummary.breakdown}`)}</span>`
+                ? `<span class="trust-badge trust-${trustSummary.tier}" data-trust='${escapeHtml(JSON.stringify(trustSummary))}'>${escapeHtml(trustSummary.avgScore === null ? trustSummary.breakdown : `${trustSummary.avgScore} · ${trustSummary.breakdown}`)}</span>`
                 : "";
 
             card.innerHTML = `
