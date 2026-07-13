@@ -109,13 +109,23 @@ async def test_scope_gate_accepts_in_scope_llm_verdict(monkeypatch: pytest.Monke
 
 @pytest.mark.asyncio
 async def test_scope_gate_fails_open_on_llm_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = []
+
     async def _boom(**kwargs):
+        calls.append(kwargs)
         raise RuntimeError("provider down")
 
     monkeypatch.setattr("src.agents.scope_gate.create_chat_completion", _boom)
 
-    result = await scope_gate_node(_state("obscure question without ai words"))
+    query = "best pizza in Hanoi"
+    assert not _query_matches_ai_keywords(query), (
+        "test query must miss the keyword fast-path so this test actually "
+        "exercises the LLM-failure code path"
+    )
 
+    result = await scope_gate_node(_state(query))
+
+    assert calls, "create_chat_completion was never called; fast-path skipped it"
     assert result["scope_refusal"] is False
 
 
