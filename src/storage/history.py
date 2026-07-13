@@ -85,6 +85,16 @@ class SQLiteHistoryManager:
                 connection.execute(
                     "ALTER TABLE history ADD COLUMN workspace_id TEXT DEFAULT 'personal'"
                 )
+            # sources_json: per-source category/score snapshot (the same shape
+            # as the live "sources" WebSocket message) so the History list can
+            # recompute the trust badge for a saved report. Default '[]' means
+            # rows saved before this column existed - or any row saved without
+            # a websocket run (e.g. daily_report) - simply render no badge,
+            # never an error.
+            if "sources_json" not in columns:
+                connection.execute(
+                    "ALTER TABLE history ADD COLUMN sources_json TEXT NOT NULL DEFAULT '[]'"
+                )
             connection.execute("CREATE INDEX IF NOT EXISTS idx_history_timestamp ON history(timestamp DESC)")
 
     def _row_to_entry(self, row: sqlite3.Row) -> dict[str, Any]:
@@ -103,6 +113,7 @@ class SQLiteHistoryManager:
             "session_id": row["session_id"] if "session_id" in keys else "",
             "org_id": (row["org_id"] if "org_id" in keys else None) or "personal",
             "workspace_id": (row["workspace_id"] if "workspace_id" in keys else None) or "personal",
+            "sources": json.loads(row["sources_json"]) if "sources_json" in keys and row["sources_json"] else [],
         }
 
     def add_entry(
@@ -117,6 +128,7 @@ class SQLiteHistoryManager:
         session_id: str = "",
         org_id: str = "personal",
         workspace_id: str = "personal",
+        sources: Optional[list[dict[str, Any]]] = None,
     ) -> str:
         """Insert a new history entry.
 
@@ -134,6 +146,9 @@ class SQLiteHistoryManager:
           org_id: Multi-tenant hook; no org concept exists yet, so this is
             `"personal"` for every caller today.
           workspace_id: Multi-tenant hook; `"personal"` for every caller today.
+          sources: Per-source category/score snapshot (same shape as the
+            live "sources" WebSocket message) for recomputing the trust
+            badge later. Defaults to an empty list.
 
         Returns:
           The newly generated entry id (a UUID4 string).
@@ -145,8 +160,8 @@ class SQLiteHistoryManager:
                 """
                 INSERT INTO history (
                     id, timestamp, query, mode, report, suggested_questions, pdf_path, preview,
-                    evaluation_result, kind, session_id, org_id, workspace_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    evaluation_result, kind, session_id, org_id, workspace_id, sources_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     entry_id,
@@ -162,6 +177,7 @@ class SQLiteHistoryManager:
                     session_id or "",
                     org_id or "personal",
                     workspace_id or "personal",
+                    json.dumps(sources or [], ensure_ascii=False),
                 ),
             )
         return entry_id
@@ -173,6 +189,7 @@ class SQLiteHistoryManager:
         suggested_questions: Optional[list[str]] = None,
         pdf_path: Optional[str] = None,
         evaluation_result: Optional[dict[str, Any]] = None,
+        sources: Optional[list[dict[str, Any]]] = None,
     ) -> None:
         """Update fields on an existing history entry, leaving others unchanged.
 
@@ -182,6 +199,7 @@ class SQLiteHistoryManager:
           suggested_questions: New list of suggested follow-up questions.
           pdf_path: New PDF export path.
           evaluation_result: New evaluation metrics.
+          sources: Per-source category/score snapshot for the trust badge.
 
         Any argument left as `None` keeps the entry's existing value. If
         no entry with `entry_id` exists, this is a no-op.
@@ -196,12 +214,14 @@ class SQLiteHistoryManager:
         updated_evaluation = (
             evaluation_result if evaluation_result is not None else existing.get("evaluation_result", {})
         )
+        updated_sources = sources if sources is not None else existing.get("sources", [])
 
         with self._lock, self._connect() as connection:
             connection.execute(
                 """
                 UPDATE history
-                SET report = ?, suggested_questions = ?, pdf_path = ?, preview = ?, evaluation_result = ?
+                SET report = ?, suggested_questions = ?, pdf_path = ?, preview = ?, evaluation_result = ?,
+                    sources_json = ?
                 WHERE id = ?
                 """,
                 (
@@ -210,6 +230,7 @@ class SQLiteHistoryManager:
                     updated_pdf_path,
                     self._generate_preview(updated_report),
                     json.dumps(updated_evaluation, ensure_ascii=False),
+                    json.dumps(updated_sources, ensure_ascii=False),
                     entry_id,
                 ),
             )

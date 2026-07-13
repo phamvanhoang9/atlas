@@ -51,7 +51,47 @@ const AtlasShared = (() => {
 
     const converter = () => new showdown.Converter({ tables: true, openLinksInNewWindow: true });
 
-    return { authHeaders, withAuthToken, escapeHtml, timeAgo, converter, locale };
+    const TRUST_CATEGORY_SHORT = {
+        official: "official", peer_reviewed: "peer-reviewed", arxiv_preprint: "arxiv",
+        ai_lab_blog: "AI lab", github_repo: "GitHub", engineering_blog: "eng blog",
+        tech_forum: "forum", uncategorized: "web", news: "news", low_quality: "low-quality",
+    };
+
+    // Deterministic trust badge summary from source_scorer categories — never
+    // LLM-generated (D-008). Returns null when there is nothing to score
+    // (Mục 8.2: "0 nguồn tìm được" must hide the badge, not show "0/100").
+    // Shared between the live turn (scripts.js) and stored History entries
+    // (history.js) so both surfaces compute the identical badge.
+    const computeTrustSummary = (sources) => {
+        if (!Array.isArray(sources) || sources.length === 0) return null;
+
+        const counts = new Map();
+        let scoreSum = 0;
+        let scoreCount = 0;
+        sources.forEach((source) => {
+            const category = source.category || "uncategorized";
+            counts.set(category, (counts.get(category) || 0) + 1);
+            const score = Number(source.score);
+            if (Number.isFinite(score)) { scoreSum += score; scoreCount += 1; }
+        });
+
+        // Tie-break: highest count first, then alphabetical by category key,
+        // so equal-count categories render in a stable, deterministic order
+        // (Mục 8.2: "2 nguồn điểm bằng nhau — tie-break hiển thị thứ tự nào").
+        const breakdown = [...counts.entries()]
+            .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+            .map(([category, count]) => `${count} ${TRUST_CATEGORY_SHORT[category] || category}`)
+            .join(" · ");
+
+        const avgScore = scoreCount ? Math.round(scoreSum / scoreCount) : null;
+        const tier = avgScore === null ? "low" : avgScore >= 80 ? "high" : avgScore >= 50 ? "mid" : "low";
+        return { avgScore, tier, breakdown, count: sources.length };
+    };
+
+    return {
+        authHeaders, withAuthToken, escapeHtml, timeAgo, converter, locale,
+        computeTrustSummary, TRUST_CATEGORY_SHORT,
+    };
 })();
 window.AtlasShared = AtlasShared;
 
@@ -357,43 +397,8 @@ const Atlas = (() => {
     // (e.g. "2 official · 1 arxiv"). Falls back to the raw category key for
     // any taxonomy value not listed here, so a future source_scorer category
     // never breaks the badge (Mục 8.2: "nguồn không khớp category nào").
-    const TRUST_CATEGORY_SHORT = {
-        official: "official", peer_reviewed: "peer-reviewed", arxiv_preprint: "arxiv",
-        ai_lab_blog: "AI lab", github_repo: "GitHub", engineering_blog: "eng blog",
-        tech_forum: "forum", uncategorized: "web", news: "news", low_quality: "low-quality",
-    };
-
-    // Deterministic trust badge summary from source_scorer categories — never
-    // LLM-generated (D-008). Returns null when there is nothing to score
-    // (Mục 8.2: "0 nguồn tìm được" must hide the badge, not show "0/100").
-    const computeTrustSummary = (sources) => {
-        if (!Array.isArray(sources) || sources.length === 0) return null;
-
-        const counts = new Map();
-        let scoreSum = 0;
-        let scoreCount = 0;
-        sources.forEach((source) => {
-            const category = source.category || "uncategorized";
-            counts.set(category, (counts.get(category) || 0) + 1);
-            const score = Number(source.score);
-            if (Number.isFinite(score)) { scoreSum += score; scoreCount += 1; }
-        });
-
-        // Tie-break: highest count first, then alphabetical by category key,
-        // so equal-count categories render in a stable, deterministic order
-        // (Mục 8.2: "2 nguồn điểm bằng nhau — tie-break hiển thị thứ tự nào").
-        const breakdown = [...counts.entries()]
-            .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-            .map(([category, count]) => `${count} ${TRUST_CATEGORY_SHORT[category] || category}`)
-            .join(" · ");
-
-        const avgScore = scoreCount ? Math.round(scoreSum / scoreCount) : null;
-        const tier = avgScore === null ? "low" : avgScore >= 80 ? "high" : avgScore >= 50 ? "mid" : "low";
-        return { avgScore, tier, breakdown, count: sources.length };
-    };
-
     const renderTrustBadge = (turn, sources) => {
-        const summary = computeTrustSummary(sources);
+        const summary = AtlasShared.computeTrustSummary(sources);
         if (!summary) { turn.trustBadge.classList.add("is-hidden"); return; }
         turn.trustBadge.className = `trust-badge trust-${summary.tier}`;
         turn.trustBadge.textContent = summary.avgScore === null ? summary.breakdown : `${summary.avgScore} · ${summary.breakdown}`;
@@ -710,10 +715,10 @@ const Atlas = (() => {
             turn.pdfLink.classList.remove("disabled");
         }
         renderFollowups(turn, entry.suggested_questions || []);
-        turn.sourcesBody.innerHTML = `<p class="empty-note">${AtlasShared.escapeHtml(t("stored.sourcesNote"))}</p>`;
-        turn.sourcesSummary.dataset.count = "";
-        turn.sourcesSummary.textContent = t("answer.sources");
-        turn.sourcesDis.classList.remove("is-hidden");
+        // Entries saved before sources_json existed (or with no ranked sources
+        // for that run) render the same "no sources" state as a live 0-source
+        // run — Mục 8.2 treats both as "hide badge", not a distinct error.
+        renderSources(turn, entry.sources || []);
         return turn;
     };
 

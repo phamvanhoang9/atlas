@@ -67,7 +67,6 @@ const AtlasI18n = (() => {
             "sources.empty": "No ranked sources for this run.",
             "followups.empty": "No follow-up questions for this run.",
             "stored.loaded": "Loaded from history",
-            "stored.sourcesNote": "Live source ranking is shown during a run. For stored reports, see the Sources section inside the report.",
             // Automation
             "auto.title": "Daily AI Intelligence",
             "auto.subtitle": "ATLAS runs a deep research pass over your topics on a schedule and emails the report.",
@@ -193,7 +192,6 @@ const AtlasI18n = (() => {
             "sources.empty": "Không có nguồn nào cho lần chạy này.",
             "followups.empty": "Không có câu hỏi tiếp theo cho lần chạy này.",
             "stored.loaded": "Tải từ lịch sử",
-            "stored.sourcesNote": "Xếp hạng nguồn trực tiếp chỉ hiện khi đang chạy. Với báo cáo đã lưu, xem phần Nguồn trong báo cáo.",
             "auto.title": "Trí tuệ AI Hằng ngày",
             "auto.subtitle": "ATLAS chạy một lượt nghiên cứu chuyên sâu theo lịch và gửi báo cáo qua email.",
             "auto.enabled": "Bật báo cáo hằng ngày",

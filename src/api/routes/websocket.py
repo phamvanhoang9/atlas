@@ -95,6 +95,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             suggested_questions = deps.manager.suggested_questions.get(websocket, [])
             evaluation_results = getattr(deps.manager, "evaluation_results", {})
             evaluation_result = evaluation_results.get(websocket, {})
+            sources = getattr(deps.manager, "sources", {}).get(websocket, [])
             await deps.run_sync(
                 deps.history_manager.update_entry,
                 history_id,
@@ -102,6 +103,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 pdf_path=path,
                 suggested_questions=suggested_questions,
                 evaluation_result=evaluation_result,
+                sources=sources,
             )
 
             await websocket.send_json({"type": "path", "output": path})

@@ -69,6 +69,82 @@ def test_add_entry_accepts_explicit_org_and_workspace() -> None:
     assert entry["workspace_id"] == "acme-eng"
 
 
+def test_new_entries_default_to_empty_sources() -> None:
+    db_path = Path(".atlas_cache") / f"test_history_{uuid.uuid4().hex}.sqlite"
+    manager = SQLiteHistoryManager(str(db_path))
+
+    entry_id = manager.add_entry("query", "ask")
+    entry = manager.get_entry(entry_id)
+
+    assert entry["sources"] == []
+
+
+def test_update_entry_stores_sources_for_trust_badge() -> None:
+    db_path = Path(".atlas_cache") / f"test_history_{uuid.uuid4().hex}.sqlite"
+    manager = SQLiteHistoryManager(str(db_path))
+
+    entry_id = manager.add_entry("query", "ask")
+    sources = [
+        {"url": "https://arxiv.org/abs/1", "title": "Paper", "category": "arxiv_preprint", "score": 82},
+    ]
+    manager.update_entry(entry_id, sources=sources)
+
+    entry = manager.get_entry(entry_id)
+    assert entry["sources"] == sources
+
+
+def test_update_entry_without_sources_leaves_existing_sources_unchanged() -> None:
+    db_path = Path(".atlas_cache") / f"test_history_{uuid.uuid4().hex}.sqlite"
+    manager = SQLiteHistoryManager(str(db_path))
+
+    entry_id = manager.add_entry("query", "ask")
+    sources = [{"url": "https://example.com", "title": "T", "category": "official", "score": 90}]
+    manager.update_entry(entry_id, sources=sources)
+    manager.update_entry(entry_id, report="new report body")
+
+    entry = manager.get_entry(entry_id)
+    assert entry["report"] == "new report body"
+    assert entry["sources"] == sources
+
+
+def test_legacy_rows_predating_sources_column_default_to_empty_list() -> None:
+    """A DB created before sources_json existed must show an empty list
+    (badge hidden), never a crash — see modes_redesign_plan.md Mục 8.2
+    ("record cũ trước khi có cột này -> ẩn badge, không hiện lỗi")."""
+    db_path = Path(".atlas_cache") / f"test_history_{uuid.uuid4().hex}.sqlite"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            """
+            CREATE TABLE history (
+                id TEXT PRIMARY KEY,
+                timestamp TEXT NOT NULL,
+                query TEXT NOT NULL,
+                mode TEXT NOT NULL,
+                report TEXT NOT NULL,
+                suggested_questions TEXT NOT NULL,
+                pdf_path TEXT NOT NULL,
+                preview TEXT NOT NULL,
+                evaluation_result TEXT NOT NULL DEFAULT '{}',
+                kind TEXT NOT NULL DEFAULT 'chat',
+                session_id TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
+        connection.execute(
+            "INSERT INTO history (id, timestamp, query, mode, report, suggested_questions, pdf_path, preview) "
+            "VALUES ('legacy-1', ?, 'old query', 'ask', 'r', '[]', '', 'r')",
+            (datetime.now().isoformat(),),
+        )
+
+    manager = SQLiteHistoryManager(str(db_path))
+    entry = manager.get_entry("legacy-1")
+
+    assert entry is not None
+    assert entry["sources"] == []
+
+
 def test_legacy_rows_predating_org_columns_backfill_to_personal() -> None:
     """A DB created before org_id/workspace_id existed must not surface NULL
     for old rows once the app upgrades — see modes_redesign_plan.md Mục 8.2

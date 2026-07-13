@@ -4,7 +4,7 @@
  */
 
 const AtlasHistory = (() => {
-    const { authHeaders, withAuthToken, escapeHtml, timeAgo } = window.AtlasShared;
+    const { authHeaders, withAuthToken, escapeHtml, timeAgo, computeTrustSummary } = window.AtlasShared;
     const t = (k, v) => AtlasI18n.t(k, v);
 
     let allEntries = [];
@@ -95,10 +95,18 @@ const AtlasHistory = (() => {
             const countChip = (group.sessionId && count > 1)
                 ? `<span class="count-chip">${escapeHtml(t("session.turns", { n: count }))}</span>`
                 : "";
+            // Older entries saved before sources_json existed have no sources
+            // -> computeTrustSummary returns null -> badge simply omitted,
+            // same "hide, don't error" rule as the live 0-source case.
+            const trustSummary = computeTrustSummary(latest.sources);
+            const trustChip = trustSummary
+                ? `<span class="trust-badge trust-${trustSummary.tier}" title="${escapeHtml(t("trust.badge.tip", { n: trustSummary.count }))}">${escapeHtml(trustSummary.avgScore === null ? trustSummary.breakdown : `${trustSummary.avgScore} · ${trustSummary.breakdown}`)}</span>`
+                : "";
 
             card.innerHTML = `
                 <div class="history-item-head">
                     <span class="mode-badge ${badgeClass}">${escapeHtml(badgeText)}</span>
+                    ${trustChip}
                     ${countChip}
                 </div>
                 <div class="history-item-query">${escapeHtml(oldest.query || "(untitled)")}</div>
