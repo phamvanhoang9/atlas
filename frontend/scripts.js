@@ -130,6 +130,187 @@ const AtlasRouter = (() => {
 })();
 window.AtlasViews = AtlasRouter;
 
+/* -------------------------------------------------- Explain this / Vet this side panel */
+// Trụ cột 5 (modes_redesign_plan.md): context actions, NOT a mode — a single
+// side panel reused by both "Explain this" (per source) and "Vet this"
+// (free-form claim). Deliberately outside the composer/mode-select flow.
+
+const AtlasPanel = (() => {
+    const { authHeaders, escapeHtml } = window.AtlasShared;
+    const t = (k, v) => AtlasI18n.t(k, v);
+    const el = (id) => document.getElementById(id);
+
+    let activeController = null;   // in-flight fetch for the currently open panel
+
+    const isOpen = () => el("sidePanel").classList.contains("show");
+
+    const close = () => {
+        // Cancel any in-flight request so a slow response from a panel the
+        // user already closed can never land in a stale/reused panel state
+        // (Mục 8.2: "đang gọi mà user bấm nút khác/rời trang").
+        if (activeController) { activeController.abort(); activeController = null; }
+        el("sidePanel").classList.remove("show");
+        el("sidePanel").setAttribute("aria-hidden", "true");
+        el("sideOverlay").classList.remove("show");
+    };
+
+    const open = (kind, tagText) => {
+        if (activeController) { activeController.abort(); activeController = null; }
+        el("sidePanelTag").textContent = tagText;
+        el("sidePanelTag").className = `side-panel-tag ${kind}`;
+        el("sidePanel").classList.add("show");
+        el("sidePanel").setAttribute("aria-hidden", "false");
+        el("sideOverlay").classList.add("show");
+    };
+
+    const setBody = (html) => { el("sidePanelBody").innerHTML = html; };
+
+    const openExplain = async (passage, context) => {
+        open("explain", t("explain.title"));
+        setBody(`
+            <h4>${escapeHtml(t("explain.original"))}</h4>
+            <div class="orig-text">${escapeHtml(passage)}</div>
+            <p class="side-panel-spinner">${escapeHtml(t("explain.loading"))}</p>
+        `);
+
+        const controller = new AbortController();
+        activeController = controller;
+        try {
+            const response = await fetch("/api/explain", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", ...authHeaders() },
+                body: JSON.stringify({ passage, context: context || "" }),
+                signal: controller.signal,
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) throw new Error(data.detail || "explain failed");
+            activeController = null;
+
+            const result = data.data;
+            if (result.skipped) {
+                setBody(`
+                    <h4>${escapeHtml(t("explain.original"))}</h4>
+                    <div class="orig-text">${escapeHtml(passage)}</div>
+                    <p class="empty-note">${escapeHtml(t("explain.tooShort"))}</p>
+                `);
+                return;
+            }
+            setBody(`
+                <h4>${escapeHtml(t("explain.original"))}</h4>
+                <div class="orig-text">${escapeHtml(passage)}</div>
+                <h4>${escapeHtml(t("explain.result"))}</h4>
+                <p>${escapeHtml(result.explanation)}</p>
+            `);
+        } catch (error) {
+            if (error.name === "AbortError") return;   // panel closed mid-request; nothing to render
+            console.error("Explain failed:", error);
+            setBody(`
+                <h4>${escapeHtml(t("explain.original"))}</h4>
+                <div class="orig-text">${escapeHtml(passage)}</div>
+                <p class="empty-note">${escapeHtml(t("explain.error"))}</p>
+            `);
+        }
+    };
+
+    const VERDICT_CLASS = {
+        confirmed: "confirmed", contradicted: "contradicted",
+        insufficient_evidence: "insufficient_evidence", not_verifiable: "not_verifiable",
+    };
+
+    const renderVetForm = (prefill) => `
+        <h4>${escapeHtml(t("vet.claim"))}</h4>
+        <form class="vet-form" id="vetForm">
+            <textarea id="vetClaimInput" placeholder="${escapeHtml(t("vet.placeholder"))}" required>${escapeHtml(prefill || "")}</textarea>
+            <button type="submit" class="btn btn-primary">${escapeHtml(t("vet.submit"))}</button>
+        </form>
+    `;
+
+    const wireVetForm = () => {
+        const form = el("vetForm");
+        if (!form) return;
+        form.addEventListener("submit", (event) => {
+            event.preventDefault();
+            const claim = el("vetClaimInput").value.trim();
+            if (claim) runVet(claim);
+        });
+    };
+
+    const openVet = (prefillClaim) => {
+        open("vet", t("vet.title"));
+        setBody(renderVetForm(prefillClaim));
+        wireVetForm();
+        if (prefillClaim) runVet(prefillClaim);
+    };
+
+    const runVet = async (claim) => {
+        setBody(`
+            <h4>${escapeHtml(t("vet.claim"))}</h4>
+            <div class="orig-text">${escapeHtml(claim)}</div>
+            <p class="side-panel-spinner">${escapeHtml(t("vet.loading"))}</p>
+        `);
+
+        const controller = new AbortController();
+        activeController = controller;
+        try {
+            const response = await fetch("/api/vet", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", ...authHeaders() },
+                body: JSON.stringify({ claim }),
+                signal: controller.signal,
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) throw new Error(data.detail || "vet failed");
+            activeController = null;
+
+            const result = data.data;
+            const verdictClass = VERDICT_CLASS[result.verdict] || "insufficient_evidence";
+            const evidenceHtml = (result.evidence || []).length
+                ? result.evidence.map((e) => `
+                    <div class="evidence-item">
+                        <div class="source-meta">
+                            <span class="cat-chip ${e.category || "uncategorized"}">${escapeHtml(e.category_label || "Web source")}</span>
+                            <span class="source-score">${e.quality_score ?? "?"}/100</span>
+                        </div>
+                        <a class="source-title" href="${escapeHtml(e.url)}" target="_blank" rel="noopener">${escapeHtml(e.title || e.url)}</a>
+                    </div>
+                `).join("")
+                : `<p class="empty-note">${escapeHtml(t("vet.evidence.empty"))}</p>`;
+
+            setBody(`
+                <h4>${escapeHtml(t("vet.claim"))}</h4>
+                <div class="orig-text">${escapeHtml(claim)}</div>
+                <span class="verdict-pill ${verdictClass}">${escapeHtml(t(`vet.verdict.${result.verdict}`))}</span>
+                <p>${escapeHtml(result.explanation || "")}</p>
+                <h4>${escapeHtml(t("vet.evidence"))}</h4>
+                ${evidenceHtml}
+            `);
+        } catch (error) {
+            if (error.name === "AbortError") return;
+            console.error("Vet failed:", error);
+            setBody(`
+                <h4>${escapeHtml(t("vet.claim"))}</h4>
+                <div class="orig-text">${escapeHtml(claim)}</div>
+                <p class="empty-note">${escapeHtml(t("vet.error"))}</p>
+            `);
+        }
+    };
+
+    const init = () => {
+        el("sideOverlay").addEventListener("click", close);
+        el("sidePanelClose").addEventListener("click", close);
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape" && isOpen()) close();
+        });
+        const vetEntry = el("vetEntryBtn");
+        if (vetEntry) vetEntry.addEventListener("click", () => openVet());
+    };
+
+    document.addEventListener("DOMContentLoaded", init);
+
+    return { openExplain, openVet, close };
+})();
+window.AtlasPanel = AtlasPanel;
+
 /* -------------------------------------------------- research view */
 
 const Atlas = (() => {
@@ -433,6 +614,21 @@ const Atlas = (() => {
                 score.textContent = `${source.score ?? "?"}/100`;
                 meta.appendChild(chip);
                 meta.appendChild(score);
+                // Sources saved before the snippet field existed (older
+                // history entries) have nothing to explain — disable rather
+                // than send a blank passage to /api/explain (Mục 8.2:
+                // "claim/passage rỗng → disable nút thay vì lỗi 400").
+                if (source.snippet) {
+                    const explainBtn = document.createElement("button");
+                    explainBtn.type = "button";
+                    explainBtn.className = "source-explain-btn";
+                    explainBtn.textContent = t("explain.btn");
+                    explainBtn.title = t("explain.btn.tip");
+                    explainBtn.addEventListener("click", () => {
+                        if (window.AtlasPanel) window.AtlasPanel.openExplain(source.snippet, source.title || "");
+                    });
+                    meta.appendChild(explainBtn);
+                }
                 item.appendChild(link);
                 item.appendChild(meta);
                 turn.sourcesBody.appendChild(item);

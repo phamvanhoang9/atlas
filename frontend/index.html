@@ -10,8 +10,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <script src="/site/theme.js?v=24"></script>
-    <link rel="stylesheet" href="/site/styles.css?v=24"/>
+    <script src="/site/theme.js?v=25"></script>
+    <link rel="stylesheet" href="/site/styles.css?v=25"/>
 </head>
 
 <body>
@@ -94,7 +94,10 @@
                     <input type="hidden" name="report_type" id="reportType" value="ask">
                     <button id="sendBtn" class="send-btn" type="submit" data-i18n-title="composer.send.tip" aria-label="Send">↑</button>
                 </form>
-                <div class="tagline" data-i18n="tagline">Cites everything. Guesses nothing.</div>
+                <div class="composer-foot">
+                    <button type="button" id="vetEntryBtn" class="link-btn" data-i18n="vet.entry">✓ Vet a claim</button>
+                    <div class="tagline" data-i18n="tagline">Cites everything. Guesses nothing.</div>
+                </div>
             </div>
         </div>
     </section>
@@ -220,12 +223,22 @@
 
 <div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="false"></div>
 
+<!-- ============ side panel (Explain this / Vet this — Trụ cột 5) ============ -->
+<div class="overlay" id="sideOverlay"></div>
+<aside class="side-panel" id="sidePanel" aria-hidden="true">
+    <div class="side-panel-head">
+        <span class="side-panel-tag" id="sidePanelTag"></span>
+        <button class="side-panel-close" id="sidePanelClose" type="button" aria-label="Close">✕</button>
+    </div>
+    <div class="side-panel-body" id="sidePanelBody"></div>
+</aside>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/1.9.1/showdown.min.js"></script>
-<script src="/site/toast.js?v=24"></script>
-<script src="/site/i18n.js?v=24"></script>
-<script src="/site/scripts.js?v=24"></script>
-<script src="/site/history.js?v=24"></script>
-<script src="/site/automation.js?v=24"></script>
+<script src="/site/toast.js?v=25"></script>
+<script src="/site/i18n.js?v=25"></script>
+<script src="/site/scripts.js?v=25"></script>
+<script src="/site/history.js?v=25"></script>
+<script src="/site/automation.js?v=25"></script>
 </body>
 
 </html>

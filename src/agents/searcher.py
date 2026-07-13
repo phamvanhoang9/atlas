@@ -112,6 +112,10 @@ async def _filter_academic(scraped, ws=None):
                                 "category": doc.get("source_category", "uncategorized"),
                                 "category_label": doc.get("source_category_label", "Web source"),
                                 "score": doc.get("quality_score", 0),
+                                # Short passage for the "Explain this" button
+                                # (Phần 1 #2) - derived from scraped content,
+                                # not re-fetched, so it stays cheap.
+                                "snippet": (doc.get("raw_content") or "")[:280].strip(),
                             }
                             for doc in filtered[:24]
                         ],

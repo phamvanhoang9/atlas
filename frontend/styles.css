@@ -798,6 +798,82 @@ a:hover { text-decoration: underline; }
 }
 .toast-close:hover { color: var(--ink); }
 
+/* ------------------------------------------------- composer foot / entry points */
+
+.composer-foot { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 6px; }
+.link-btn {
+    appearance: none; background: transparent; border: none; cursor: pointer;
+    font: inherit; font-size: 12.5px; color: var(--ink-faint); padding: 2px 4px;
+}
+.link-btn:hover { color: var(--accent-ink); }
+
+/* ------------------------------------------------- explain button (per source) */
+
+.source-explain-btn {
+    appearance: none; background: transparent; border: 1px solid var(--border); cursor: pointer;
+    font: inherit; font-size: 11px; font-weight: 600; color: var(--ink-soft);
+    padding: 1px 8px; border-radius: 999px; margin-left: auto; white-space: nowrap;
+}
+.source-explain-btn:hover { background: var(--accent-soft); color: var(--accent-ink); border-color: transparent; }
+
+/* ------------------------------------------------- side panel (Explain this / Vet this) */
+
+.overlay {
+    position: fixed; inset: 0; background: rgba(4, 6, 12, .55); backdrop-filter: blur(2px);
+    z-index: 85; opacity: 0; pointer-events: none; transition: opacity .18s ease;
+}
+.overlay.show { opacity: 1; pointer-events: auto; }
+
+.side-panel {
+    position: fixed; top: 0; right: 0; height: 100%; width: 400px; max-width: 92vw;
+    background: var(--bg-elev); border-left: 1px solid var(--border-strong);
+    box-shadow: -20px 0 60px rgba(0, 0, 0, .4); z-index: 90;
+    transform: translateX(100%); transition: transform .22s ease;
+    display: flex; flex-direction: column;
+}
+.side-panel.show { transform: translateX(0); }
+.side-panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 20px; border-bottom: 1px solid var(--border); flex: none;
+}
+.side-panel-tag { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--accent-ink); }
+.side-panel-tag.vet { color: var(--purple); }
+.side-panel-close {
+    background: var(--surface); border: 1px solid var(--border); color: var(--ink);
+    border-radius: 8px; width: 28px; height: 28px; cursor: pointer;
+}
+.side-panel-close:hover { background: var(--surface-soft); }
+.side-panel-body { padding: 20px; overflow-y: auto; flex: 1; font-size: 13.5px; }
+.side-panel-body h4 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint);
+    margin: 16px 0 8px;
+}
+.side-panel-body h4:first-child { margin-top: 0; }
+.side-panel-body p { line-height: 1.6; margin: 0 0 10px; }
+.orig-text {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 12px; color: var(--ink-soft); font-size: 13px;
+}
+.verdict-pill {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700;
+    border-radius: 999px; padding: 5px 12px;
+}
+.verdict-pill.confirmed { background: var(--green-soft); color: var(--green); }
+.verdict-pill.contradicted { background: var(--red-soft); color: var(--red); }
+.verdict-pill.insufficient_evidence { background: var(--amber-soft); color: var(--amber); }
+.verdict-pill.not_verifiable { background: var(--surface-soft); color: var(--ink-soft); }
+.vet-form { display: flex; flex-direction: column; gap: 10px; }
+.vet-form textarea {
+    font: inherit; font-size: 13.5px; resize: vertical; min-height: 70px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 12px; color: var(--ink);
+}
+.side-panel-spinner { color: var(--ink-faint); font-size: 13px; }
+.evidence-item {
+    border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px 11px;
+    background: var(--surface); margin-bottom: 8px;
+}
+
 /* ------------------------------------------------- responsive */
 
 @media (max-width: 900px) {
@@ -820,4 +896,5 @@ a:hover { text-decoration: underline; }
     .search-input { width: 100%; }
     .history-grid { grid-template-columns: 1fr; }
     .page-inner { padding: 18px 14px; }
+    .side-panel { width: 100vw; max-width: 100vw; }
 }
