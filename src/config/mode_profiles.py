@@ -18,8 +18,20 @@ _ASK_PROFILE = {
 }
 
 _COMPARE_PROFILE = {
-    "max_iterations": 3,
-    "max_search_results_per_query": 7,
+    # max_iterations/max_search_results_per_query sized for the job-shape
+    # (comparing several objects, 2-5 in the common case per
+    # modes_redesign_plan.md Mục 8.2 - not iterating deeper on one topic):
+    # 4 LLM-generated sub-queries + the original = 5 total, enough room for
+    # roughly one query per object plus a combined query. The per-query
+    # result count is bumped over ask's (6->8) because compare's search is
+    # domain-restricted to academic/primary sources (see
+    # src/modes/registry.py _COMPARE_INCLUDE_DOMAINS), which narrows the
+    # candidate pool per query relative to ask/deep_dive's unrestricted
+    # search. max_scrape_urls=24 (registry.py) is the real cost ceiling
+    # regardless of these two knobs, and the >5-object outlier case is
+    # capped at the Decision Matrix layer, not by inflating this profile.
+    "max_iterations": 4,
+    "max_search_results_per_query": 8,
     "token_limit": 8000,
     "total_words": 2000,
     "temperature": 0.2,

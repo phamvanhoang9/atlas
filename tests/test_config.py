@@ -103,6 +103,20 @@ def test_apply_mode_config():
             assert config.max_iterations == 5
             assert config.total_words == 3000
 
+
+def test_compare_profile_sized_for_multi_object_search_breadth():
+    """Compare's job is comparing several objects (2-5 in the common case,
+    per modes_redesign_plan.md Mục 8.2's own edge-case framing), not
+    iterating deeper on one topic - so it needs enough sub-queries for
+    roughly one per object plus the combined query, not just "more than
+    ask, less than deep_dive" by accident. See Mục 7 Giai đoạn 2 #4."""
+    with patch("os.path.exists", return_value=True), patch("builtins.open", MagicMock()):
+        with patch("json.load", return_value={}):
+            config = Config()
+            config.apply_mode_config("compare")
+            assert config.max_iterations == 4
+            assert config.max_search_results_per_query == 8
+
 def test_invalid_config_value_raises_config_error():
     with patch("os.path.exists", return_value=True), patch("builtins.open", MagicMock()):
         with patch("json.load", return_value={"token_limit": 999999}):
