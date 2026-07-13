@@ -71,9 +71,9 @@ MODES: dict[str, ModeSpec] = {
     COMPARE: ModeSpec(
         id=COMPARE,
         label="Compare",
-        description="Structured analysis grounded in papers, official sources, and technical reports.",
-        report_template="research_report",
-        url_report_template="research_report",
+        description="Structured decision matrix grounded in papers, official sources, and technical reports.",
+        report_template="decision_matrix",
+        url_report_template="decision_matrix",
         search_include_domains=_COMPARE_INCLUDE_DOMAINS,
         max_scrape_urls=24,
         priority_note="PRIORITY: Source quality > Depth > Accuracy",

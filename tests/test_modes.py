@@ -77,6 +77,11 @@ def test_mode_specs_have_distinct_behavior() -> None:
     assert deep_dive.url_report_template != deep_dive.report_template
 
 
+def test_compare_uses_decision_matrix_report_template() -> None:
+    assert MODES[COMPARE].report_template == "decision_matrix"
+    assert MODES[COMPARE].url_report_template == "decision_matrix"
+
+
 def test_get_mode_spec_falls_back_for_unknown_strings() -> None:
     assert get_mode_spec("phân tích") is MODES[COMPARE]
     assert get_mode_spec("deep_dive") is MODES[DEEP_DIVE]

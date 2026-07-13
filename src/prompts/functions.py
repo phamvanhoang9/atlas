@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from src.modes import ASK, DEEP_DIVE, get_mode_spec, normalize_mode
+from src.modes import ASK, COMPARE, DEEP_DIVE, get_mode_spec, normalize_mode
 from src.prompts.registry import render_prompt
 
 
@@ -167,6 +167,13 @@ def system_role_for_mode(report_type: str, has_source_urls: bool = False) -> str
         return (
             "You are a precise AI research assistant. Answer directly, ground every "
             "claim in the provided sources, and flag uncertainty honestly."
+        )
+    if canonical == COMPARE:
+        return (
+            "You are a decision-support analyst building a structured comparison, not "
+            "writing an essay. Score every option against the same criteria, cite the "
+            "evidence behind each cell, and never declare a winner the sources don't "
+            "actually support."
         )
     return (
         "You are an AI research analyst. Prioritize primary sources, separate fact "

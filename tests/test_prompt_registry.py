@@ -72,6 +72,62 @@ def test_deep_mode_with_urls_uses_source_analysis_template() -> None:
     assert "explaining the provided source documents" in prompt
 
 
+def test_compare_uses_decision_matrix_template() -> None:
+    """Compare's job is a structured comparison, not the old free-form
+    'research_report' essay - see modes_redesign_plan.md Mục 7 Giai đoạn 2."""
+    prompt = get_report_by_type("compare")(
+        "GPT-4o vs Claude vs Gemini for Vietnamese summarization",
+        ["Source: https://example.com\nContent: benchmark results"],
+        "markdown",
+        1200,
+    )
+
+    assert "## Objects Compared" in prompt
+    assert "## Decision Matrix" in prompt
+    assert "## Implementation & Benchmarks" in prompt
+    assert "## Recommendation" in prompt
+    assert "## Trade-offs" not in prompt  # old research_report heading, retired
+
+
+def test_compare_decision_matrix_covers_mandatory_edge_cases() -> None:
+    """Doubt-driven-development requires these edge cases (Mục 8.2) to be
+    explicitly instructed, not left to happy-path chance: single object,
+    >5 objects, alias merging, and no-evidence cells."""
+    prompt = get_report_by_type("compare")("q", ["ctx"], "markdown", 500)
+
+    assert "ONE clear object" in prompt
+    assert "more than 5 distinct objects" in prompt
+    assert "SAME underlying" in prompt
+    assert "No evidence found" in prompt
+
+
+def test_compare_url_mode_also_uses_decision_matrix_template() -> None:
+    prompt = get_report_by_type("compare", has_source_urls=True)("q", ["ctx"], "markdown", 500)
+
+    assert "## Decision Matrix" in prompt
+
+
+def test_compare_prompt_instructs_light_contradiction_flagging() -> None:
+    """Light contradiction (Mục 7 Giai đoạn 2 #3) lives at the prompt/output
+    level for now - no new LangGraph node until the full contradiction_check
+    is built in Giai đoạn 4. Must never let the model silently pick a side."""
+    prompt = get_report_by_type("compare")("q", ["ctx"], "markdown", 500)
+
+    assert "## Contradictions" in prompt
+    assert "do not silently pick" in prompt
+
+
+def test_compare_prompt_instructs_paper_code_benchmark_linking() -> None:
+    """Paper<->code<->benchmark linking (Mục 2, Papers with Code gap) uses
+    the source_scorer category label already present in each source header
+    (context_builder.py's `category_line`) - never invents a repo/benchmark
+    link the context doesn't actually provide."""
+    prompt = get_report_by_type("compare")("q", ["ctx"], "markdown", 500)
+
+    assert "## Implementation & Benchmarks" in prompt
+    assert "do not invent a repo or benchmark link" in prompt
+
+
 def test_agent_prompt_uses_yaml_template() -> None:
     prompt = auto_agent_instructions()
 
