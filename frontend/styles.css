@@ -716,6 +716,29 @@ a:hover { text-decoration: underline; }
 .run-error { color: var(--red); font-size: 12.5px; margin-top: 4px; word-break: break-word; }
 .run-link { font-size: 12.5px; font-weight: 600; cursor: pointer; color: var(--accent); }
 
+/* ----------------------------------------------- radar */
+
+.radar-section { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--border); }
+.radar-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.radar-preset-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.radar-preset-btn { font-size: 12.5px; padding: 6px 12px; }
+
+.radar-category-checks { display: flex; flex-wrap: wrap; gap: 8px; }
+.radar-check-item { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.radar-check-item input { width: auto; margin: 0; }
+
+.radar-watch-list { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+.radar-watch-card { padding: 16px 18px; }
+.radar-watch-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.radar-watch-name { font-weight: 700; font-size: 15px; margin-left: 8px; }
+.radar-watch-toggle { flex: none; }
+.radar-watch-meta { font-size: 12.5px; color: var(--ink-soft); margin-top: 6px; }
+.radar-watch-topics { font-size: 13px; color: var(--ink); margin-top: 6px; }
+.radar-watch-categories { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.radar-watch-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.radar-runs { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+
 /* ------------------------------------------------- history */
 
 .history-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

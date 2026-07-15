@@ -88,10 +88,13 @@ const AtlasHistory = (() => {
             const card = document.createElement("div");
             card.className = "history-item";
 
-            const badgeClass = kind === "daily_report" ? "daily" : (MODE_CLASSES[latest.mode] || "compare");
+            const isRadar = kind === "radar_digest" || kind === "radar_report";
+            const badgeClass = kind === "daily_report" ? "daily" : (isRadar ? "daily" : (MODE_CLASSES[latest.mode] || "compare"));
             const badgeText = kind === "daily_report"
                 ? t("badge.daily")
-                : t(MODE_LABEL_KEYS[latest.mode] || "mode.compare");
+                : isRadar
+                    ? t("badge.radar")
+                    : t(MODE_LABEL_KEYS[latest.mode] || "mode.compare");
             const countChip = (group.sessionId && count > 1)
                 ? `<span class="count-chip">${escapeHtml(t("session.turns", { n: count }))}</span>`
                 : "";

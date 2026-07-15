@@ -247,6 +247,7 @@ const AtlasAutomation = (() => {
         });
         loadConfig();
         loadRuns();
+        if (window.AtlasRadar) window.AtlasRadar.init();
     };
 
     window.AtlasViews.register("automation", init, loadRuns);
