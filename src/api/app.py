@@ -21,8 +21,11 @@ from src.api.routes.actions import router as actions_router
 from src.api.routes.automation import router as automation_router
 from src.api.routes.evaluation import router as evaluation_router
 from src.api.routes.history import router as history_router
+from src.api.routes.radar import router as radar_router
 from src.api.routes.websocket import router as websocket_router
 from src.automation.daily_report import run_daily_report
+from src.automation.radar import run_watch_digest
+from src.automation.radar_scheduler import RadarScheduler
 from src.automation.scheduler import AutomationScheduler
 
 load_dotenv()
@@ -60,14 +63,23 @@ async def lifespan(app: FastAPI):
     async def _daily_job(trigger: str = "scheduled"):
         return await run_daily_report(deps.automation_store, deps.history_manager, trigger=trigger)
 
+    async def _watch_job(watch: dict, trigger: str = "scheduled"):
+        return await run_watch_digest(watch, deps.watch_store, deps.history_manager, trigger=trigger)
+
     stale = deps.automation_store.clear_stale_running_runs()
     if stale:
         logger.warning("Cleared %s interrupted automation run(s) on startup", stale)
 
     scheduler = AutomationScheduler(deps.automation_store, _daily_job)
     scheduler.start()
+
+    radar_scheduler = RadarScheduler(deps.watch_store, _watch_job)
+    radar_scheduler.start()
+
     yield
+
     await scheduler.stop()
+    await radar_scheduler.stop()
     logger.info("ATLAS shutdown")
 
 
@@ -139,6 +151,7 @@ def create_app() -> FastAPI:
     app.include_router(evaluation_router)
     app.include_router(automation_router)
     app.include_router(actions_router)
+    app.include_router(radar_router)
     return app
 
 
