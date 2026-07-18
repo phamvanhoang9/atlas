@@ -126,6 +126,7 @@ def test_period_key_for_weekly_is_iso_week(store: WatchStore) -> None:
 
 @pytest.mark.asyncio
 async def test_capturing_websocket_keeps_only_sources_messages() -> None:
+    """Verify CapturingWebSocket filters and captures only 'sources' messages."""
     ws = CapturingWebSocket()
     await ws.send_json({"type": "logs", "output": "hello"})
     await ws.send_json({"type": "sources", "output": [{"url": "https://a.example"}]})

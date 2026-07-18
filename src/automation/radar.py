@@ -64,9 +64,11 @@ class CapturingWebSocket:
     """
 
     def __init__(self) -> None:
+        """Initialize the message capture buffer."""
         self.messages: list[dict[str, Any]] = []
 
     async def send_json(self, data: dict[str, Any]) -> None:
+        """Capture "sources" messages only; discard all others silently."""
         if isinstance(data, dict) and data.get("type") == "sources":
             self.messages.append(data)
 
