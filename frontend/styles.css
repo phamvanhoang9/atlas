@@ -892,6 +892,7 @@ a:hover { text-decoration: underline; }
     padding: 10px 12px; color: var(--ink);
 }
 .side-panel-spinner { color: var(--ink-faint); font-size: 13px; }
+.plan-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 16px; }
 .evidence-item {
     border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px 11px;
     background: var(--surface); margin-bottom: 8px;

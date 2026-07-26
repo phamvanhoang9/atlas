@@ -299,6 +299,63 @@ const AtlasPanel = (() => {
         }
     };
 
+    // -------- Deep Dive plan-gate approval (Giai đoạn 4) --------
+    // Reuses this same side panel rather than a second UI surface (see
+    // .claude/memory/anti-patterns.md #2 "Hai bề mặt UI làm cùng 1 việc").
+    // *onRespond(payload)* sends the client's decision back over the
+    // already-open research WebSocket; this module never touches the
+    // socket directly.
+
+    const renderPlanForm = (proposal, onRespond) => {
+        const headingsText = (proposal.headings || []).join("\n");
+        setBody(`
+            <p class="empty-note">${escapeHtml(t("plan.intro"))}</p>
+            <h4>${escapeHtml(t("plan.approach"))}</h4>
+            <div class="vet-form">
+                <textarea id="planApproachInput">${escapeHtml(proposal.approach || "")}</textarea>
+            </div>
+            <h4>${escapeHtml(t("plan.headings"))}</h4>
+            <div class="vet-form">
+                <textarea id="planHeadingsInput" rows="8">${escapeHtml(headingsText)}</textarea>
+            </div>
+            <div class="plan-actions">
+                <button type="button" class="btn btn-primary" id="planApproveBtn">${escapeHtml(t("plan.approve"))}</button>
+                <button type="button" class="btn" id="planRegenerateBtn">${escapeHtml(t("plan.regenerate"))}</button>
+                <button type="button" class="btn btn-danger-ghost" id="planRejectBtn">${escapeHtml(t("plan.reject"))}</button>
+            </div>
+            <h4>${escapeHtml(t("plan.feedback"))}</h4>
+            <div class="vet-form">
+                <textarea id="planFeedbackInput" placeholder="${escapeHtml(t("plan.feedback.placeholder"))}"></textarea>
+            </div>
+        `);
+
+        const readEditedPlan = () => ({
+            headings: el("planHeadingsInput").value.split("\n").map((h) => h.trim()).filter(Boolean),
+            approach: el("planApproachInput").value.trim(),
+        });
+
+        el("planApproveBtn").addEventListener("click", () => {
+            onRespond({ action: "approve", plan: readEditedPlan() });
+            close();
+        });
+        el("planRegenerateBtn").addEventListener("click", () => {
+            const feedback = el("planFeedbackInput").value.trim();
+            onRespond({ action: "regenerate", feedback });
+            setBody(`<p class="side-panel-spinner">${escapeHtml(t("plan.regenerating"))}</p>`);
+        });
+        el("planRejectBtn").addEventListener("click", () => {
+            onRespond({ action: "reject" });
+            close();
+        });
+    };
+
+    // Called once per plan_proposal WS message — including regenerated
+    // ones, so the panel just re-renders with the new proposal each time.
+    const openPlanApproval = (proposal, onRespond) => {
+        open("plan", t("plan.title"));
+        renderPlanForm(proposal, onRespond);
+    };
+
     const init = () => {
         el("sideOverlay").addEventListener("click", close);
         el("sidePanelClose").addEventListener("click", close);
@@ -311,7 +368,7 @@ const AtlasPanel = (() => {
 
     document.addEventListener("DOMContentLoaded", init);
 
-    return { openExplain, openVet, close };
+    return { openExplain, openVet, openPlanApproval, close };
 })();
 window.AtlasPanel = AtlasPanel;
 
@@ -944,6 +1001,15 @@ const Atlas = (() => {
                     break;
                 }
                 case "report": handleReportMessage(data); break;
+                case "plan_proposal": {
+                    const proposal = data.output || {};
+                    AtlasPanel.openPlanApproval(proposal, (response) => {
+                        if (socket && socket.readyState === WebSocket.OPEN) {
+                            socket.send("plan_response " + JSON.stringify({ ...response, run_id: proposal.run_id }));
+                        }
+                    });
+                    break;
+                }
                 case "sources": renderSources(turn, data.output); break;
                 case "refusal": showRefusal(turn, data.output); break;
                 case "suggested_questions": renderFollowups(turn, data.output); break;
