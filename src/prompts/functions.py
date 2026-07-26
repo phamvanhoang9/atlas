@@ -148,8 +148,24 @@ def get_report_by_type(report_type: str, has_source_urls: bool = False) -> calla
     spec = get_mode_spec(report_type)
     template_name = spec.url_report_template if has_source_urls else spec.report_template
 
-    def _render(query: str, context: list[str], report_format: str, total_words: int) -> str:
-        # Context is passed as a list of strings and formatted by _normalize_value in render_prompt
+    def _render(
+        query: str,
+        context: list[str],
+        report_format: str,
+        total_words: int,
+        research_plan: dict | None = None,
+        contradiction_ledger: str = "",
+        confidence_block: str = "",
+    ) -> str:
+        # Context is passed as a list of strings and formatted by _normalize_value in render_prompt.
+        # research_plan/contradiction_ledger/confidence_block are deep_dive-only variables; other
+        # templates simply don't reference them, so passing them is always safe (safe_substitute).
+        headings = (research_plan or {}).get("headings") or []
+        plan_headings_block = (
+            "\n".join(f'  - "## {heading}"' for heading in headings)
+            if headings
+            else "  - (no approved plan headings; use your judgment for section headings based on the topic)"
+        )
         prompt = render_prompt(
             template_name,
             {
@@ -158,6 +174,9 @@ def get_report_by_type(report_type: str, has_source_urls: bool = False) -> calla
                 "report_format": report_format,
                 "total_words": total_words,
                 "current_year": datetime.now().year,
+                "plan_headings_block": plan_headings_block,
+                "contradiction_ledger_block": contradiction_ledger or "No contradictions were found among the collected sources.",
+                "confidence_block": confidence_block or "Not assessed.",
             },
         )
         if prompt is None:

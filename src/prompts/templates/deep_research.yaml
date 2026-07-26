@@ -17,24 +17,25 @@ template: |
   Structure (use these exact section headings, in this order):
   - First line: "# $question"
   - "## Executive Summary" — the decision-relevant conclusion in one paragraph.
-  - "## What Matters" — the 3-5 developments or findings that actually matter,
-    and why.
-  - "## Technical Analysis" — mechanisms, architectures, benchmarks, and
-    methodology details from the sources.
+  - The approved research plan for this investigation covers these headings
+    — use each one as a "##" section, in the order given, right after the
+    Executive Summary (do not rename, merge, or add headings beyond these):
+  $plan_headings_block
   - "## Source-Based Evidence" — key claims with their supporting sources,
-    grouped by source quality (papers/official first). Where sources
-    contradict each other, state the contradiction explicitly and which
-    source is more credible and why.
-  - "## Impact on AI Engineers" — what practitioners should change or adopt.
-  - "## Impact on AI Coding" — effects on coding workflows, tools, assistants.
-  - "## Impact on Product & Startups" — product and business implications,
-    including cost/performance considerations when relevant.
+    grouped by source quality (papers/official first).
+  - "## Contradiction Ledger" — copy the block below VERBATIM (already
+    computed from the collected sources; do not regenerate, re-word, or
+    pick a winner between contradicting claims — both sides are shown on
+    purpose):
+    $contradiction_ledger_block
   - "## Risks and Unknowns" — open questions; mark single-source or weak
     claims as "unverified".
   - "## Recommended Actions" — concrete, prioritized next steps.
   - "## Sources" — the reference list (see citation rules).
-  - "## Confidence Level" — High / Medium / Low with one sentence of
-    justification based on source quality and agreement.
+  - "## Confidence Level" — copy the line below VERBATIM (already computed
+    deterministically from source quality; do not assess your own
+    confidence):
+    $confidence_block
 
   Citation rules:
   - Each source in the context has a sequential number visible in its header

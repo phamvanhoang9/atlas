@@ -311,3 +311,39 @@ async def contradiction_check_node(state: ResearchState) -> dict[str, Any]:
         contradictions = []
 
     return {**state, "contradictions": contradictions, "confidence_trace": confidence_trace}
+
+
+# ---------------------------------------------------------------------------
+# Deterministic report-section rendering
+#
+# The LLM is instructed to restate these verbatim in the report rather than
+# recompute them — trust/confidence must stay deterministic (D-008 lineage),
+# and the ledger's "never pick a winner" rule is much easier to guarantee by
+# rendering it in Python than by hoping the LLM follows a prompt rule.
+# ---------------------------------------------------------------------------
+
+
+def render_contradiction_ledger(contradictions: list[dict[str, Any]]) -> str:
+    """Render the Contradiction Ledger markdown block deterministically."""
+    if not contradictions:
+        return "No contradictions were found among the collected sources."
+
+    blocks: list[str] = []
+    for item in contradictions:
+        label = "Cross-source contradiction" if item.get("type") != "internal" else "Same-source inconsistency"
+        lines = [f"**{label}: {item.get('topic', '')}**"]
+        for entry in item.get("entries", []):
+            category = entry.get("source_category") or "unscored source"
+            score = entry.get("quality_score")
+            score_text = f"{score}/100" if score is not None else "unscored"
+            lines.append(f"- [{category}, {score_text}] {entry.get('source_url', '')}: {entry.get('claim', '')}")
+        blocks.append("\n".join(lines))
+
+    return "\n\n".join(blocks)
+
+
+def render_confidence_block(confidence_trace: dict[str, Any]) -> str:
+    """Render the Confidence Level markdown block deterministically."""
+    label = confidence_trace.get("label", "Low")
+    reasoning = confidence_trace.get("reasoning", "")
+    return f"{label} — {reasoning}" if reasoning else label
