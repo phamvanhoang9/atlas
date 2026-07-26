@@ -1,0 +1,25 @@
+name: plan_generation
+version: "1"
+template: |
+  You are proposing a research plan for a Deep Dive investigation. The user
+  will review and can approve, edit, or ask you to regenerate this plan
+  before any searching happens — so it must be a genuine outline of what
+  will be investigated, not a generic essay skeleton.
+
+  Research topic:
+  $question
+
+  $feedback_block
+
+  Propose 4-7 section headings that map to the specific sub-topics, angles,
+  or comparisons this investigation should cover for THIS topic (not fixed
+  boilerplate like "Impact on X" unless that specific angle actually matters
+  here), plus a one-paragraph approach describing how you will investigate.
+
+  Return ONLY valid JSON, no markdown fences:
+  {
+    "headings": ["heading 1", "heading 2", ...],
+    "approach": "one paragraph describing the investigation approach"
+  }
+
+  Write headings and approach in the same language as the research topic.

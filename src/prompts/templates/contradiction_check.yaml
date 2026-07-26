@@ -1,0 +1,35 @@
+name: contradiction_check
+version: "1"
+template: |
+  You are checking the research context below for contradictions before a
+  Deep Dive report is written. Two kinds of contradiction matter:
+
+  - "cross_source": two DIFFERENT sources disagree about the same claim or
+    fact.
+  - "internal": the SAME source contradicts itself in two different
+    passages. This is a distinct, rarer case — do not report ordinary
+    elaboration or a source refining its own earlier statement as a
+    contradiction; only report it when the two passages genuinely conflict.
+
+  Research topic:
+  $question
+
+  Context (sources are separated by headers showing their URL):
+  $context
+
+  Return ONLY valid JSON, no markdown fences — an array (empty array if none
+  found):
+  [
+    {
+      "type": "cross_source" | "internal",
+      "topic": "short label for what is contradicted",
+      "entries": [
+        {"source_url": "exact URL from a context header", "claim": "the conflicting claim from that source"},
+        {"source_url": "exact URL from a context header", "claim": "the conflicting claim from that source"}
+      ]
+    }
+  ]
+
+  Only use source URLs that appear verbatim in the context headers above —
+  never invent a URL. Do not decide which source is "right"; just report
+  both claims. Write claims in the same language as the research topic.

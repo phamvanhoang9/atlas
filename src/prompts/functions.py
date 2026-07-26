@@ -192,6 +192,30 @@ def generate_explain_prompt(passage: str, context: str = "") -> str:
     return prompt
 
 
+def generate_plan_prompt(question: str, feedback: str = "") -> str:
+    """Load the Deep Dive plan-gate prompt (modes_redesign_plan.md Mục 7 Giai đoạn 4).
+
+    *feedback* carries the user's "regenerate" request text, if any.
+    """
+    feedback_block = (
+        f"The user asked for a different plan, with this feedback: {feedback}"
+        if feedback
+        else ""
+    )
+    prompt = render_prompt("plan_generation", {"question": question, "feedback_block": feedback_block})
+    if prompt is None:
+        raise ValueError("Missing plan_generation.yaml template")
+    return prompt
+
+
+def generate_contradiction_check_prompt(question: str, context: list[str]) -> str:
+    """Load the Deep Dive contradiction-check prompt."""
+    prompt = render_prompt("contradiction_check", {"question": question, "context": context})
+    if prompt is None:
+        raise ValueError("Missing contradiction_check.yaml template")
+    return prompt
+
+
 def generate_vet_verdict_prompt(claim: str, evidence: list[dict]) -> str:
     """Load the "Vet this" verdict prompt.
 
