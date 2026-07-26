@@ -18,6 +18,7 @@ class FakeWebSocketManager:
 
     def __init__(self) -> None:
         self.suggested_questions = {}
+        self.running_jobs: set = set()
 
     async def connect(self, websocket) -> None:
         await websocket.accept()
@@ -25,8 +26,21 @@ class FakeWebSocketManager:
 
     async def disconnect(self, websocket) -> None:
         self.suggested_questions.pop(websocket, None)
+        self.running_jobs.discard(websocket)
 
-    async def start_streaming(self, task: str, report_type: str, websocket) -> str:
+    def start_job(self, websocket) -> bool:
+        if websocket in self.running_jobs:
+            return False
+        self.running_jobs.add(websocket)
+        return True
+
+    def finish_job(self, websocket) -> None:
+        self.running_jobs.discard(websocket)
+
+    def resolve_plan_response(self, websocket, run_id, payload) -> None:
+        pass
+
+    async def start_streaming(self, task: str, report_type: str, websocket, run_id: str = "") -> str:
         await websocket.send_json({"type": "logs", "output": "Đang chạy kiểm thử mẫu..."})
         await websocket.send_json({"type": "report", "output": "# Báo cáo mẫu\nNội dung mẫu."})
         return "# Báo cáo mẫu\nNội dung mẫu."

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -19,14 +20,68 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["websocket"])
 
 
+async def _run_job(
+    websocket: WebSocket, task: str, report_type: str, history_id: str, session_id: str, request_id: str
+) -> None:
+    """Run one research job to completion as a background task.
+
+    Runs concurrently with the connection's receive loop (see
+    websocket_endpoint) so a Deep Dive plan-approval response sent mid-job
+    can still reach `deps.manager.resolve_plan_response()` — the receive
+    loop is never blocked awaiting this coroutine. Always clears the
+    running-job guard via `finally`, even on an unhandled error, so a
+    crashed job can never permanently wedge the connection.
+    """
+    start = time.perf_counter()
+    try:
+        report = await deps.manager.start_streaming(task, report_type, websocket, run_id=request_id)
+        logger.info("Research job report generated id=%s chars=%s", request_id, len(report))
+        path = await write_md_to_pdf(report)
+        logger.info("Research job PDF exported id=%s path=%s", request_id, path)
+
+        suggested_questions = deps.manager.suggested_questions.get(websocket, [])
+        evaluation_results = getattr(deps.manager, "evaluation_results", {})
+        evaluation_result = evaluation_results.get(websocket, {})
+        sources = getattr(deps.manager, "sources", {}).get(websocket, [])
+        await deps.run_sync(
+            deps.history_manager.update_entry,
+            history_id,
+            report=report,
+            pdf_path=path,
+            suggested_questions=suggested_questions,
+            evaluation_result=evaluation_result,
+            sources=sources,
+        )
+
+        await websocket.send_json({"type": "path", "output": path})
+        duration_ms = (time.perf_counter() - start) * 1000
+        logger.info(
+            "Research job complete id=%s history_id=%s suggested_questions=%s duration_ms=%.1f",
+            request_id,
+            history_id,
+            len(suggested_questions),
+            duration_ms,
+        )
+    except (RuntimeError, OSError, ValueError, TypeError, KeyError) as exc:
+        logger.exception("Research job failed id=%s: %s", request_id, exc)
+    finally:
+        deps.manager.finish_job(websocket)
+
+
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
     """Run research jobs over a single WebSocket connection and stream progress.
 
-    Authenticates the socket, then loops accepting `"start<json>"` messages,
-    each describing one research job: it creates/reuses a history entry,
-    runs the LangGraph workflow via `deps.manager.start_streaming()`,
-    exports the report to PDF, and persists the final result. The loop
+    Authenticates the socket, then loops accepting messages: `"start<json>"`
+    kicks off one research job as a background task (see `_run_job`), and
+    `"plan_response<json>"` resolves a Deep Dive plan-approval wait for the
+    job it names by `run_id`. Backgrounding job execution (rather than
+    awaiting it inline) is what makes the plan_response dispatch reachable
+    at all — the receive loop must stay free to read the next message while
+    a job's plan_gate node is waiting on one. Only one job runs at a time
+    per connection (`deps.manager.start_job`/`finish_job`); a second
+    `"start"` while one is in flight is rejected with an error message
+    rather than spawning a second, output-interleaving task. The loop
     continues across multiple jobs until the client disconnects or an
     unrecoverable error occurs.
 
@@ -47,12 +102,19 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     try:
         while True:
             data = await websocket.receive_text()
+
+            if data.startswith("plan_response"):
+                # Client sends "plan_response " (14-char prefix) + JSON payload.
+                payload = json.loads(data[14:])
+                run_id = str(payload.get("run_id", ""))
+                deps.manager.resolve_plan_response(websocket, run_id, payload)
+                continue
+
             if not data.startswith("start"):
                 logger.warning("Unsupported WebSocket message prefix client=%s", websocket.client.host if websocket.client else "-")
                 continue
 
             request_id = uuid.uuid4().hex[:8]
-            start = time.perf_counter()
             # Client sends "start " (5-char prefix + space) followed by the JSON payload.
             json_data = json.loads(data[6:])
             task = json_data.get("task")
@@ -68,7 +130,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 logger.warning("WebSocket message with unknown mode id=%s mode=%r", request_id, report_type)
                 await websocket.send_json({
                     "type": "error",
-                    "output": f"Unknown research mode '{report_type}'. Valid modes: quick, research, deep.",
+                    "output": f"Unknown research mode '{report_type}'. Valid modes: ask, compare, deep_dive.",
                 })
                 continue
             report_type = normalize_mode(report_type)
@@ -87,34 +149,15 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 await websocket.send_json({"type": "history_id", "output": history_id})
                 logger.info("Research job history created id=%s history_id=%s", request_id, history_id)
 
-            report = await deps.manager.start_streaming(task, report_type, websocket)
-            logger.info("Research job report generated id=%s chars=%s", request_id, len(report))
-            path = await write_md_to_pdf(report)
-            logger.info("Research job PDF exported id=%s path=%s", request_id, path)
+            if not deps.manager.start_job(websocket):
+                logger.warning("Rejected concurrent job on connection id=%s", request_id)
+                await websocket.send_json({
+                    "type": "error",
+                    "output": "A research job is already running on this connection.",
+                })
+                continue
 
-            suggested_questions = deps.manager.suggested_questions.get(websocket, [])
-            evaluation_results = getattr(deps.manager, "evaluation_results", {})
-            evaluation_result = evaluation_results.get(websocket, {})
-            sources = getattr(deps.manager, "sources", {}).get(websocket, [])
-            await deps.run_sync(
-                deps.history_manager.update_entry,
-                history_id,
-                report=report,
-                pdf_path=path,
-                suggested_questions=suggested_questions,
-                evaluation_result=evaluation_result,
-                sources=sources,
-            )
-
-            await websocket.send_json({"type": "path", "output": path})
-            duration_ms = (time.perf_counter() - start) * 1000
-            logger.info(
-                "Research job complete id=%s history_id=%s suggested_questions=%s duration_ms=%.1f",
-                request_id,
-                history_id,
-                len(suggested_questions),
-                duration_ms,
-            )
+            asyncio.create_task(_run_job(websocket, task, report_type, history_id, session_id, request_id))
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected client=%s", websocket.client.host if websocket.client else "-")
         await deps.manager.disconnect(websocket)
