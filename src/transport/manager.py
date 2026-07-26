@@ -23,6 +23,14 @@ class WebSocketManager:
         self.suggested_questions: Dict[WebSocket, List[str]] = {}
         self.evaluation_results: Dict[WebSocket, dict[str, Any]] = {}
         self.sources: Dict[WebSocket, List[dict[str, Any]]] = {}
+        # Giai đoạn 4: Deep Dive plan-approval round trip. Keyed by
+        # (websocket, run_id) so a stale/duplicate response for a finished
+        # job can never resolve a different job's pending wait.
+        self.plan_waiters: Dict[tuple, "asyncio.Future[dict[str, Any]]"] = {}
+        # One job at a time per connection — a second "start" while a job
+        # is in flight is rejected rather than spawning a second concurrent
+        # task that would interleave unrelated output on the same socket.
+        self.running_jobs: set = set()
 
     async def _sender_loop(self, websocket: WebSocket) -> None:
         """Background task that drains the message queue for *websocket*."""
@@ -53,6 +61,10 @@ class WebSocketManager:
 
     async def disconnect(self, websocket: WebSocket) -> None:
         """Cancel the sender task and clear all tracked state for *websocket*."""
+        for key, future in list(self.plan_waiters.items()):
+            if key[0] is websocket and not future.done():
+                future.cancel()
+        self.running_jobs.discard(websocket)
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
             self.sender_tasks[websocket].cancel()
@@ -67,11 +79,53 @@ class WebSocketManager:
             del self.message_queues[websocket]
             logger.info("WebSocket manager disconnected active_connections=%s", len(self.active_connections))
 
-    async def start_streaming(self, task: str, report_type: str, websocket: WebSocket) -> str:
-        """Entry point — run the research agent and stream results."""
+    async def await_plan_response(self, websocket: WebSocket, run_id: str, timeout: float) -> dict[str, Any]:
+        """Wait for the client's plan_response for *run_id*, or fail closed.
+
+        Never raises TimeoutError/CancelledError — both a wait timeout and a
+        disconnect-triggered cancellation (see disconnect()) normalize to
+        the same {"action": "_timeout_or_disconnected"} sentinel, so
+        plan_gate_node only ever has to check a plain dict.
+        """
+        key = (websocket, run_id)
+        future: asyncio.Future = asyncio.get_event_loop().create_future()
+        self.plan_waiters[key] = future
+        try:
+            return await asyncio.wait_for(future, timeout=timeout)
+        except (asyncio.TimeoutError, asyncio.CancelledError):
+            return {"action": "_timeout_or_disconnected"}
+        finally:
+            self.plan_waiters.pop(key, None)
+
+    def resolve_plan_response(self, websocket: WebSocket, run_id: str, payload: dict[str, Any]) -> None:
+        """Resolve the pending plan-approval wait for *(websocket, run_id)*, if any."""
+        future = self.plan_waiters.get((websocket, run_id))
+        if future is None or future.done():
+            logger.warning("plan_response with no pending waiter run_id=%s", run_id)
+            return
+        future.set_result(payload)
+
+    def start_job(self, websocket: WebSocket) -> bool:
+        """Mark a job as running for *websocket*. Returns False if one is already in flight."""
+        if websocket in self.running_jobs:
+            return False
+        self.running_jobs.add(websocket)
+        return True
+
+    def finish_job(self, websocket: WebSocket) -> None:
+        """Clear the running-job marker for *websocket* (always call in a finally block)."""
+        self.running_jobs.discard(websocket)
+
+    async def start_streaming(self, task: str, report_type: str, websocket: WebSocket, run_id: str = "") -> str:
+        """Entry point — run the research agent and stream results.
+
+        *run_id* correlates a Deep Dive plan-approval round trip
+        (plan_waiters) to this specific job; pass the same id used to
+        dispatch "plan_response" messages for this job.
+        """
         start = time.perf_counter()
         logger.info("Streaming start mode=%s task_len=%s", report_type, len(task))
-        report = await run_agent(task, report_type, websocket, self)
+        report = await run_agent(task, report_type, websocket, self, run_id=run_id)
         logger.info(
             "Streaming complete mode=%s report_chars=%s duration_ms=%.1f",
             report_type,
@@ -139,6 +193,12 @@ class _WebsocketWrapper:
     async def send_text(self, data: str) -> None:
         return await self.ws.send_text(data)
 
+    async def await_plan_response(self, run_id: str, timeout: float) -> dict[str, Any]:
+        """Delegate to the manager's plan-approval wait, or fail closed if there is none."""
+        if not self.mgr or not self.original_ws:
+            return {"action": "_timeout_or_disconnected"}
+        return await self.mgr.await_plan_response(self.original_ws, run_id, timeout)
+
 
 # ---------------------------------------------------------------------------
 # Agent runner
@@ -149,8 +209,16 @@ async def run_agent(
     report_type: str,
     websocket: WebSocket,
     manager: Optional[WebSocketManager] = None,
+    run_id: str = "",
 ) -> str:
-    """Run the LangGraph research agent end-to-end."""
+    """Run the LangGraph research agent end-to-end.
+
+    *run_id* is threaded into LangGraphResearcher so deep_dive's plan_gate
+    node can correlate its WebSocket plan-approval wait to this job;
+    headless is always False here — this is the interactive path (Radar's
+    headless path constructs LangGraphResearcher directly, see
+    src/automation/radar.py).
+    """
     # Late import to avoid circular dependency at module level
     from src.orchestration.runner import LangGraphResearcher
 
@@ -186,6 +254,8 @@ async def run_agent(
         source_urls=source_urls if source_urls else None,
         config_path=config_path,
         websocket=wrapped_websocket,
+        run_id=run_id,
+        headless=False,
     )
     report = await researcher.run()
 

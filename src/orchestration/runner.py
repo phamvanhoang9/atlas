@@ -25,6 +25,8 @@ class LangGraphResearcher:
         config_path: Optional[str] = None,
         websocket: Any = None,
         enable_parallel_search: Optional[bool] = None,
+        run_id: str = "",
+        headless: bool = False,
     ) -> None:
         """Resolve config/mode overrides and build the workflow for this run.
 
@@ -40,11 +42,19 @@ class LangGraphResearcher:
               connected client.
             enable_parallel_search: Optional override for parallel search;
               falls back to the resolved config value when omitted.
+            run_id: Unique id for this run, used by deep_dive's plan_gate
+              node to correlate a WebSocket plan-approval round trip to
+              this specific job.
+            headless: True for non-interactive execution (e.g. Radar
+              watches) where plan_gate must auto-approve rather than wait
+              for a client response that will never arrive.
         """
         self.query = query
         self.report_type = report_type
         self.source_urls = source_urls or []
         self.websocket = websocket
+        self.run_id = run_id
+        self.headless = headless
 
         self.cfg = Config(config_path)
         self.cfg.apply_mode_config(report_type)
@@ -93,6 +103,8 @@ class LangGraphResearcher:
             "cfg": self.cfg,
             "websocket": self.websocket,
             "memory": self.memory,
+            "run_id": self.run_id,
+            "headless": self.headless,
         }
 
     async def run_with_state(self) -> ResearchState:

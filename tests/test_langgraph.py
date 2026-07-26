@@ -75,6 +75,31 @@ async def test_node_execution():
 
 
 @pytest.mark.asyncio
+async def test_headless_and_run_id_thread_into_initial_state():
+    researcher = LangGraphResearcher(
+        query="test query",
+        report_type="deep_dive",
+        run_id="run-123",
+        headless=True,
+    )
+
+    state = researcher._initial_state()
+
+    assert state["run_id"] == "run-123"
+    assert state["headless"] is True
+
+
+@pytest.mark.asyncio
+async def test_headless_defaults_to_false_for_interactive_use():
+    researcher = LangGraphResearcher(query="test query", report_type="ask")
+
+    state = researcher._initial_state()
+
+    assert state["headless"] is False
+    assert state["run_id"] == ""
+
+
+@pytest.mark.asyncio
 async def test_imports():
     from langgraph.checkpoint.memory import MemorySaver
     from langgraph.graph import END, StateGraph
