@@ -256,6 +256,61 @@ def _factory_with_sources(report: str, sources: list[dict]):
 
 
 @pytest.mark.asyncio
+async def test_default_researcher_factory_passes_headless_true_for_deep_dive(
+    store: WatchStore, monkeypatch
+) -> None:
+    """Regression test (Giai đoạn 4): a deep_dive watch run through Radar's
+    DEFAULT researcher_factory (not a test-injected one) must never wait on
+    a plan-approval response CapturingWebSocket cannot provide. Without
+    headless=True, plan_gate_node would try to call
+    websocket.await_plan_response, which CapturingWebSocket (send_json
+    only) does not implement.
+    """
+    watch = _watch(store, mode="deep_dive")
+    history = _FakeHistory()
+
+    captured_kwargs: dict = {}
+
+    class _FakeLangGraphResearcher:
+        def __init__(self, **kwargs):
+            captured_kwargs.update(kwargs)
+
+        async def run_with_state(self):
+            # Exercise the real plan_gate_node against the real
+            # CapturingWebSocket passed in as `websocket`, exactly like the
+            # real LangGraphResearcher would for the plan_gate step — this
+            # is what proves the headless path never touches
+            # await_plan_response rather than merely asserting a kwarg.
+            from src.agents.deep_dive import plan_gate_node
+            from src.config.config import Config
+
+            state = {
+                "query": "test",
+                "report_type": "deep_dive",
+                "cfg": Config(),
+                "websocket": captured_kwargs["websocket"],
+                "headless": captured_kwargs.get("headless", False),
+            }
+            result = await plan_gate_node(state)
+            assert result["plan_approved"] is True
+            return {"report": "# Full report\n\n" + "x" * 300}
+
+    async def _no_network_completion(**kwargs):
+        raise RuntimeError("no network calls in this test — plan_gate must still auto-approve (fail-open)")
+
+    monkeypatch.setattr(
+        "src.orchestration.runner.LangGraphResearcher", _FakeLangGraphResearcher
+    )
+    monkeypatch.setattr("src.agents.deep_dive.create_chat_completion", _no_network_completion)
+
+    run = await run_watch_digest(watch, store, history, trigger="manual", email_sender=_mock_sender())
+
+    assert run["status"] == "success"
+    assert captured_kwargs["headless"] is True
+    assert not hasattr(captured_kwargs["websocket"], "await_plan_response")
+
+
+@pytest.mark.asyncio
 async def test_run_watch_digest_happy_path_sends_new_items(store: WatchStore) -> None:
     watch = _watch(store)
     history = _FakeHistory()

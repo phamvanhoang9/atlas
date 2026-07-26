@@ -262,7 +262,11 @@ async def run_watch_digest(
             from src.orchestration.runner import LangGraphResearcher
 
             def researcher_factory(q: str, m: str, ws: Any) -> Any:  # noqa: F811
-                return LangGraphResearcher(query=q, report_type=m, websocket=ws)
+                # headless=True: deep_dive's plan_gate node must auto-approve
+                # immediately rather than wait for a client response
+                # CapturingWebSocket (send_json only) could never deliver —
+                # see modes_redesign_plan.md Mục 7 Giai đoạn 4 #6.
+                return LangGraphResearcher(query=q, report_type=m, websocket=ws, headless=True)
 
         researcher = researcher_factory(query, mode, capturing_ws)
         final_state = await researcher.run_with_state()
