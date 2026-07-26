@@ -76,6 +76,7 @@ async def generate_sub_queries_node(state: ResearchState) -> dict[str, Any]:
                     state["query"],
                     max_iterations=max_iterations,
                     mode=state.get("report_type"),
+                    research_plan=state.get("research_plan"),
                 )},
             ],
             temperature=state["cfg"].temperature,

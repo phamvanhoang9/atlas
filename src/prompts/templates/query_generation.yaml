@@ -11,6 +11,7 @@ template: |
 
   Search policy for this research mode:
   $search_policy
+  $plan_block
 
   Rules:
   - Queries must be in English, even if the user query is in another language.

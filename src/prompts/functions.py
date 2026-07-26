@@ -79,12 +79,30 @@ def generate_scope_gate_prompt(query: str, scope_mode: str = "ai_native") -> str
     return prompt
 
 
-def generate_search_queries_prompt(question: str, max_iterations: int = 1, mode: str | None = None) -> str:
-    """Load the search query generation prompt with the mode's search policy."""
+def generate_search_queries_prompt(
+    question: str,
+    max_iterations: int = 1,
+    mode: str | None = None,
+    research_plan: dict | None = None,
+) -> str:
+    """Load the search query generation prompt with the mode's search policy.
+
+    *research_plan* (deep_dive only, from an approved plan_gate proposal)
+    steers coverage toward the approved headings — otherwise the plan gate
+    would only decorate the final report without actually driving search.
+    """
     current_year = datetime.now().year
     canonical = normalize_mode(mode) if mode else ASK
 
     format_example = '["query 1", "query 2"]' if max_iterations > 1 else '["query 1"]'
+
+    plan_block = ""
+    if research_plan and research_plan.get("headings"):
+        headings = ", ".join(research_plan["headings"])
+        plan_block = (
+            "\nThe user approved this research plan — make sure the queries "
+            f"together cover every one of these headings: {headings}"
+        )
 
     prompt = render_prompt(
         "query_generation",
@@ -96,6 +114,7 @@ def generate_search_queries_prompt(question: str, max_iterations: int = 1, mode:
             "format_example": format_example,
             "search_policy": _SEARCH_POLICIES[canonical],
             "good_example": _GOOD_EXAMPLES[canonical],
+            "plan_block": plan_block,
         },
     )
     if prompt is None:
