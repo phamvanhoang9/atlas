@@ -180,6 +180,7 @@ async def parallel_search_and_scrape_node(state: ResearchState) -> dict[str, Any
         return {**state, "visited_urls": all_urls}
 
     filtered = await _filter_academic(scraped, ws)
+    scored_sources = state.get("scored_sources", []) + filtered
     await stream_output("logs", f"Building context for {len(sub_queries)} queries...\n", ws)
 
     if normalize_mode(state["report_type"]) == DEEP_DIVE:
@@ -192,6 +193,7 @@ async def parallel_search_and_scrape_node(state: ResearchState) -> dict[str, Any
                 "context": [context_content],
                 "visited_urls": state.get("visited_urls", []) + all_urls,
                 "current_query_index": len(sub_queries),
+                "scored_sources": scored_sources,
             }
         logger.warning("Analysis context builder returned empty context, falling back to compression")
 
@@ -225,6 +227,7 @@ async def parallel_search_and_scrape_node(state: ResearchState) -> dict[str, Any
         "context": all_contexts,
         "visited_urls": state.get("visited_urls", []) + all_urls,
         "current_query_index": len(sub_queries),
+        "scored_sources": scored_sources,
     }
 
 
@@ -279,6 +282,7 @@ async def search_and_scrape_node(state: ResearchState) -> dict[str, Any]:
         return {**state, "current_query_index": idx + 1, "visited_urls": new_urls}
 
     filtered = await _filter_academic(scraped, ws)
+    scored_sources = state.get("scored_sources", []) + filtered
     await stream_output("logs", f"Building context for: {sub_query}...\n", ws)
 
     context_content = ""
@@ -305,4 +309,5 @@ async def search_and_scrape_node(state: ResearchState) -> dict[str, Any]:
         "context": [context_content] if context_content else [],
         "visited_urls": state.get("visited_urls", []) + new_urls,
         "current_query_index": idx + 1,
+        "scored_sources": scored_sources,
     }

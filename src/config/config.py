@@ -60,6 +60,8 @@ class ConfigSchema(BaseModel):
     eval_fail_thresholds: dict = Field(default_factory=dict)
     llm_kwargs: dict = Field(default_factory=dict)
     scope_mode: str = "ai_native"
+    plan_approval_timeout_seconds: int = Field(default=600, gt=0)
+    max_plan_revisions: int = Field(default=3, ge=0)
 
     @field_validator("retriever")
     @classmethod
@@ -175,6 +177,12 @@ class Config:
 
         # AI-native (default, soft) vs AI-strict (hard block) scope gate mode.
         self.scope_mode = os.getenv('SCOPE_MODE', 'ai_native')
+
+        # Deep Dive plan-gate: how long to wait for a client's plan approval
+        # response before failing closed, and how many "regenerate" round
+        # trips are allowed before auto-approving the latest proposed plan.
+        self.plan_approval_timeout_seconds = int(os.getenv('PLAN_APPROVAL_TIMEOUT_SECONDS', 600))
+        self.max_plan_revisions = int(os.getenv('MAX_PLAN_REVISIONS', 3))
 
         # Load config file FIRST (so mode configs can override it)
         self.load_config_file()

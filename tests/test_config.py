@@ -63,6 +63,23 @@ def test_scope_mode_rejects_invalid_value():
             with pytest.raises(ConfigError):
                 Config(config_file="non_existent.json")
 
+def test_plan_gate_defaults():
+    with patch("os.path.exists", return_value=False):
+        config = Config()
+    assert config.plan_approval_timeout_seconds == 600
+    assert config.max_plan_revisions == 3
+
+@patch.dict(
+    os.environ,
+    {"PLAN_APPROVAL_TIMEOUT_SECONDS": "120", "MAX_PLAN_REVISIONS": "1"},
+)
+def test_plan_gate_env_var_override():
+    with patch("os.path.exists", return_value=True), patch("builtins.open", MagicMock()):
+        with patch("json.load", return_value={}):
+            config = Config(config_file="non_existent.json")
+    assert config.plan_approval_timeout_seconds == 120
+    assert config.max_plan_revisions == 1
+
 @patch.dict(os.environ, {"RETRIEVER": "tavily", "TOKEN_LIMIT": "9999"})
 def test_config_env_vars():
     # Mock open to avoid FileNotFoundError
