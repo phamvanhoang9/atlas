@@ -57,3 +57,115 @@
 
     return { isLongEnough, truncatePassage, extractContext, computeButtonPosition, isSameContainer };
 });
+
+/* -------------------------------------------------- DOM wiring (browser only) */
+// Thin glue around the pure functions above - no unit-test surface without a
+// real DOM, verified live in the browser instead (per verification_workflow).
+// Mobile/touch: cố ý bỏ qua (không bind touchend/long-press) - toàn bộ UI
+// ATLAS hiện đã desktop-first (composer dropdown, hover badge), chưa có hạ
+// tầng test touch trong repo. Giới hạn đã biết, không phải bỏ sót.
+
+if (typeof document !== "undefined") {
+    const AtlasHighlightExplain = (() => {
+        const logic = window.AtlasHighlightExplainLogic;
+        const BLOCK_SELECTOR = "p,li,h1,h2,h3,h4,h5,h6,blockquote,td,th";
+
+        let captured = null; // { text, context } captured at mouseup time - a
+        // click on the button clears the live selection before its own click
+        // handler runs, so getSelection() can't be re-read at click time.
+
+        const btn = () => document.getElementById("highlightExplainBtn");
+
+        const hide = () => {
+            const b = btn();
+            if (b) b.classList.add("is-hidden");
+            captured = null;
+        };
+
+        // Walk up from the selection's start node looking for the nearest
+        // block-level ancestor, but never past `container` (.answer-report) -
+        // guarantees the extracted context can't leak content from outside
+        // the report (e.g. a sibling turn, the composer).
+        const findContextBlock = (node, container) => {
+            let el = node.nodeType === 1 ? node : node.parentElement;
+            while (el && el !== container) {
+                if (el.matches && el.matches(BLOCK_SELECTOR)) return el;
+                el = el.parentElement;
+            }
+            return container;
+        };
+
+        const showButtonFor = (range, text, context) => {
+            captured = { text: logic.truncatePassage(text.trim()), context };
+
+            const b = btn();
+            b.classList.remove("is-hidden");
+            // Đo sau khi unhide để getBoundingClientRect phản ánh kích thước
+            // thật, giống pattern của AtlasTrustPopover.open().
+            const rect = range.getBoundingClientRect();
+            const btnRect = b.getBoundingClientRect();
+            const pos = logic.computeButtonPosition({
+                rect,
+                btnWidth: btnRect.width,
+                btnHeight: btnRect.height,
+                viewportWidth: window.innerWidth,
+                viewportHeight: window.innerHeight,
+            });
+            b.style.left = `${pos.left}px`;
+            b.style.top = `${pos.top}px`;
+        };
+
+        const handleMouseUp = (event) => {
+            if (event.target.closest && event.target.closest("#highlightExplainBtn")) return;
+
+            const selection = window.getSelection();
+            if (!selection || selection.rangeCount === 0 || selection.isCollapsed) { hide(); return; }
+
+            const text = selection.toString();
+            if (!logic.isLongEnough(text)) { hide(); return; }
+
+            const anchorEl = selection.anchorNode.nodeType === 1 ? selection.anchorNode : selection.anchorNode.parentElement;
+            const focusEl = selection.focusNode.nodeType === 1 ? selection.focusNode : selection.focusNode.parentElement;
+            const anchorContainer = anchorEl ? anchorEl.closest(".answer-report") : null;
+            const focusContainer = focusEl ? focusEl.closest(".answer-report") : null;
+            if (!logic.isSameContainer(anchorContainer, focusContainer)) { hide(); return; }
+
+            const range = selection.getRangeAt(0);
+            const blockEl = findContextBlock(range.startContainer, anchorContainer);
+            const context = logic.extractContext(blockEl.innerText, text);
+            showButtonFor(range, text, context);
+        };
+
+        const handleClick = () => {
+            if (!captured) return;
+            const { text, context } = captured;
+            hide();
+            if (window.AtlasPanel) window.AtlasPanel.openExplain(text, context);
+        };
+
+        // mousedown-elsewhere (not selectionchange) is the hide trigger: a
+        // mousedown on the button itself would collapse the live selection
+        // and fire selectionchange before the button's own click handler
+        // runs, which would hide (and risk losing) the button mid-click.
+        const handleMouseDown = (event) => {
+            if (event.target.closest && event.target.closest("#highlightExplainBtn")) return;
+            hide();
+        };
+
+        const init = () => {
+            const b = btn();
+            if (!b) return;
+            b.addEventListener("click", handleClick);
+            document.addEventListener("mouseup", handleMouseUp);
+            document.addEventListener("mousedown", handleMouseDown);
+            document.addEventListener("scroll", hide, true);
+            document.addEventListener("keydown", (event) => {
+                if (event.key === "Escape") hide();
+            });
+        };
+
+        document.addEventListener("DOMContentLoaded", init);
+        return { hide };
+    })();
+    window.AtlasHighlightExplain = AtlasHighlightExplain;
+}
