@@ -824,20 +824,6 @@ a:hover { text-decoration: underline; }
 /* ------------------------------------------------- composer foot / entry points */
 
 .composer-foot { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 6px; }
-.link-btn {
-    appearance: none; background: transparent; border: none; cursor: pointer;
-    font: inherit; font-size: 12.5px; color: var(--ink-faint); padding: 2px 4px;
-}
-.link-btn:hover { color: var(--accent-ink); }
-
-/* ------------------------------------------------- explain button (per source) */
-
-.source-explain-btn {
-    appearance: none; background: transparent; border: 1px solid var(--border); cursor: pointer;
-    font: inherit; font-size: 11px; font-weight: 600; color: var(--ink-soft);
-    padding: 1px 8px; border-radius: 999px; margin-left: auto; white-space: nowrap;
-}
-.source-explain-btn:hover { background: var(--accent-soft); color: var(--accent-ink); border-color: transparent; }
 
 /* ------------------------------------------------- side panel (Explain this + Deep Dive plan approval) */
 

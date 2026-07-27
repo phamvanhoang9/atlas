@@ -673,21 +673,6 @@ const Atlas = (() => {
                 score.textContent = `${source.score ?? "?"}/100`;
                 meta.appendChild(chip);
                 meta.appendChild(score);
-                // Sources saved before the snippet field existed (older
-                // history entries) have nothing to explain — disable rather
-                // than send a blank passage to /api/explain (Mục 8.2:
-                // "claim/passage rỗng → disable nút thay vì lỗi 400").
-                if (source.snippet) {
-                    const explainBtn = document.createElement("button");
-                    explainBtn.type = "button";
-                    explainBtn.className = "source-explain-btn";
-                    explainBtn.textContent = t("explain.btn");
-                    explainBtn.title = t("explain.btn.tip");
-                    explainBtn.addEventListener("click", () => {
-                        if (window.AtlasPanel) window.AtlasPanel.openExplain(source.snippet, source.title || "");
-                    });
-                    meta.appendChild(explainBtn);
-                }
                 item.appendChild(link);
                 item.appendChild(meta);
                 turn.sourcesBody.appendChild(item);

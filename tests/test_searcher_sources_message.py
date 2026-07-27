@@ -14,9 +14,10 @@ class _FakeWebSocket:
 
 
 @pytest.mark.asyncio
-async def test_sources_message_includes_snippet_for_explain_button() -> None:
-    """The Explain button (Phần 1 #2) needs a short passage per source to
-    send to /api/explain; derive it from the scraped raw_content."""
+async def test_sources_message_has_no_snippet_field() -> None:
+    """The per-source Explain button (and its `snippet` payload) was removed
+    in favor of highlight-to-explain on the report text itself — the
+    'sources' message must not carry a snippet anymore."""
     ws = _FakeWebSocket()
     scraped = [
         {
@@ -31,17 +32,4 @@ async def test_sources_message_includes_snippet_for_explain_button() -> None:
     sources_messages = [m for m in ws.sent if m["type"] == "sources"]
     assert len(sources_messages) == 1
     source = sources_messages[0]["output"][0]
-    assert source["snippet"] == "A" * 280
-    assert len(source["snippet"]) <= 280
-
-
-@pytest.mark.asyncio
-async def test_sources_message_handles_missing_raw_content() -> None:
-    ws = _FakeWebSocket()
-    scraped = [{"url": "https://example.com", "title": "T", "raw_content": "short but present text ok"}]
-
-    await _filter_academic(scraped, ws)
-
-    sources_messages = [m for m in ws.sent if m["type"] == "sources"]
-    source = sources_messages[0]["output"][0]
-    assert source["snippet"] == "short but present text ok"
+    assert "snippet" not in source
