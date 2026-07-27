@@ -134,10 +134,12 @@ const AtlasRouter = (() => {
 })();
 window.AtlasViews = AtlasRouter;
 
-/* -------------------------------------------------- Explain this / Vet this side panel */
-// Trụ cột 5 (modes_redesign_plan.md): context actions, NOT a mode — a single
-// side panel reused by both "Explain this" (per source) and "Vet this"
-// (free-form claim). Deliberately outside the composer/mode-select flow.
+/* -------------------------------------------------- Explain this side panel */
+// Trụ cột 5 (modes_redesign_plan.md): a context action, NOT a mode — opened
+// by highlighting a passage in a report (see AtlasHighlightExplain in
+// highlight_explain.js). Deliberately outside the composer/mode-select flow.
+// Also reused by the Deep Dive plan-gate approval panel below (same side
+// panel, different "kind").
 
 const AtlasPanel = (() => {
     const { authHeaders, escapeHtml } = window.AtlasShared;
@@ -216,89 +218,6 @@ const AtlasPanel = (() => {
         }
     };
 
-    const VERDICT_CLASS = {
-        confirmed: "confirmed", contradicted: "contradicted",
-        insufficient_evidence: "insufficient_evidence", not_verifiable: "not_verifiable",
-    };
-
-    const renderVetForm = (prefill) => `
-        <h4>${escapeHtml(t("vet.claim"))}</h4>
-        <form class="vet-form" id="vetForm">
-            <textarea id="vetClaimInput" placeholder="${escapeHtml(t("vet.placeholder"))}" required>${escapeHtml(prefill || "")}</textarea>
-            <button type="submit" class="btn btn-primary">${escapeHtml(t("vet.submit"))}</button>
-        </form>
-    `;
-
-    const wireVetForm = () => {
-        const form = el("vetForm");
-        if (!form) return;
-        form.addEventListener("submit", (event) => {
-            event.preventDefault();
-            const claim = el("vetClaimInput").value.trim();
-            if (claim) runVet(claim);
-        });
-    };
-
-    const openVet = (prefillClaim) => {
-        open("vet", t("vet.title"));
-        setBody(renderVetForm(prefillClaim));
-        wireVetForm();
-        if (prefillClaim) runVet(prefillClaim);
-    };
-
-    const runVet = async (claim) => {
-        setBody(`
-            <h4>${escapeHtml(t("vet.claim"))}</h4>
-            <div class="orig-text">${escapeHtml(claim)}</div>
-            <p class="side-panel-spinner">${escapeHtml(t("vet.loading"))}</p>
-        `);
-
-        const controller = new AbortController();
-        activeController = controller;
-        try {
-            const response = await fetch("/api/vet", {
-                method: "POST",
-                headers: { "Content-Type": "application/json", ...authHeaders() },
-                body: JSON.stringify({ claim }),
-                signal: controller.signal,
-            });
-            const data = await response.json();
-            if (!response.ok || !data.success) throw new Error(data.detail || "vet failed");
-            activeController = null;
-
-            const result = data.data;
-            const verdictClass = VERDICT_CLASS[result.verdict] || "insufficient_evidence";
-            const evidenceHtml = (result.evidence || []).length
-                ? result.evidence.map((e) => `
-                    <div class="evidence-item">
-                        <div class="source-meta">
-                            <span class="cat-chip ${e.category || "uncategorized"}">${escapeHtml(e.category_label || "Web source")}</span>
-                            <span class="source-score">${e.quality_score ?? "?"}/100</span>
-                        </div>
-                        <a class="source-title" href="${escapeHtml(e.url)}" target="_blank" rel="noopener">${escapeHtml(e.title || e.url)}</a>
-                    </div>
-                `).join("")
-                : `<p class="empty-note">${escapeHtml(t("vet.evidence.empty"))}</p>`;
-
-            setBody(`
-                <h4>${escapeHtml(t("vet.claim"))}</h4>
-                <div class="orig-text">${escapeHtml(claim)}</div>
-                <span class="verdict-pill ${verdictClass}">${escapeHtml(t(`vet.verdict.${result.verdict}`))}</span>
-                <p>${escapeHtml(result.explanation || "")}</p>
-                <h4>${escapeHtml(t("vet.evidence"))}</h4>
-                ${evidenceHtml}
-            `);
-        } catch (error) {
-            if (error.name === "AbortError") return;
-            console.error("Vet failed:", error);
-            setBody(`
-                <h4>${escapeHtml(t("vet.claim"))}</h4>
-                <div class="orig-text">${escapeHtml(claim)}</div>
-                <p class="empty-note">${escapeHtml(t("vet.error"))}</p>
-            `);
-        }
-    };
-
     // -------- Deep Dive plan-gate approval (Giai đoạn 4) --------
     // Reuses this same side panel rather than a second UI surface (see
     // .claude/memory/anti-patterns.md #2 "Hai bề mặt UI làm cùng 1 việc").
@@ -362,13 +281,11 @@ const AtlasPanel = (() => {
         document.addEventListener("keydown", (event) => {
             if (event.key === "Escape" && isOpen()) close();
         });
-        const vetEntry = el("vetEntryBtn");
-        if (vetEntry) vetEntry.addEventListener("click", () => openVet());
     };
 
     document.addEventListener("DOMContentLoaded", init);
 
-    return { openExplain, openVet, openPlanApproval, close };
+    return { openExplain, openPlanApproval, close };
 })();
 window.AtlasPanel = AtlasPanel;
 

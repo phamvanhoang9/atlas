@@ -839,7 +839,7 @@ a:hover { text-decoration: underline; }
 }
 .source-explain-btn:hover { background: var(--accent-soft); color: var(--accent-ink); border-color: transparent; }
 
-/* ------------------------------------------------- side panel (Explain this / Vet this) */
+/* ------------------------------------------------- side panel (Explain this + Deep Dive plan approval) */
 
 .overlay {
     position: fixed; inset: 0; background: rgba(4, 6, 12, .55); backdrop-filter: blur(2px);
@@ -860,7 +860,6 @@ a:hover { text-decoration: underline; }
     padding: 18px 20px; border-bottom: 1px solid var(--border); flex: none;
 }
 .side-panel-tag { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--accent-ink); }
-.side-panel-tag.vet { color: var(--purple); }
 .side-panel-close {
     background: var(--surface); border: 1px solid var(--border); color: var(--ink);
     border-radius: 8px; width: 28px; height: 28px; cursor: pointer;
@@ -877,14 +876,6 @@ a:hover { text-decoration: underline; }
     background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
     padding: 10px 12px; color: var(--ink-soft); font-size: 13px;
 }
-.verdict-pill {
-    display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700;
-    border-radius: 999px; padding: 5px 12px;
-}
-.verdict-pill.confirmed { background: var(--green-soft); color: var(--green); }
-.verdict-pill.contradicted { background: var(--red-soft); color: var(--red); }
-.verdict-pill.insufficient_evidence { background: var(--amber-soft); color: var(--amber); }
-.verdict-pill.not_verifiable { background: var(--surface-soft); color: var(--ink-soft); }
 .vet-form { display: flex; flex-direction: column; gap: 10px; }
 .vet-form textarea {
     font: inherit; font-size: 13.5px; resize: vertical; min-height: 70px;
@@ -893,10 +884,6 @@ a:hover { text-decoration: underline; }
 }
 .side-panel-spinner { color: var(--ink-faint); font-size: 13px; }
 .plan-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 16px; }
-.evidence-item {
-    border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px 11px;
-    background: var(--surface); margin-bottom: 8px;
-}
 
 /* ------------------------------------------------- trust badge popover */
 
