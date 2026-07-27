@@ -252,22 +252,3 @@ def generate_contradiction_check_prompt(question: str, context: list[str]) -> st
     if prompt is None:
         raise ValueError("Missing contradiction_check.yaml template")
     return prompt
-
-
-def generate_vet_verdict_prompt(claim: str, evidence: list[dict]) -> str:
-    """Load the "Vet this" verdict prompt.
-
-    *evidence* must already be retrieved and scored by source_scorer
-    (deterministic) — this prompt only asks the LLM for the final verdict
-    over evidence it cannot expand.
-    """
-    lines = [
-        f"- [{item.get('quality_score', '?')}/100 · {item.get('source_category_label', 'Web source')}] "
-        f"{item.get('title') or item.get('url', 'Untitled')} — {item.get('snippet', '')}".strip()
-        for item in evidence
-    ]
-    evidence_block = "\n".join(lines) if lines else "(no evidence retrieved)"
-    prompt = render_prompt("vet_verdict", {"claim": claim, "evidence": evidence_block})
-    if prompt is None:
-        raise ValueError("Missing vet_verdict.yaml template")
-    return prompt
