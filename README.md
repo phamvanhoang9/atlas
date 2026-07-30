@@ -22,6 +22,8 @@ ATLAS is a self-hosted research assistant focused on one domain: **AI** — mode
 papers, tooling, infrastructure, agents, benchmarks. It is built for engineers and
 researchers who need answers they can verify, not just answers.
 
+**[Watch a demo clip](https://screenrec.com/share/dcSME4i8IX)**
+
 ## Why ATLAS over another chat tab
 
 Closed tools can't show you why you should trust them. ATLAS makes the trust
